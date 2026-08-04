@@ -16,8 +16,27 @@
       </button>
     </div>
 
+    <!-- 跨日未结预选提醒 Banner -->
+    <div v-if="!isTeamMode && expiredPlannedRecords.length > 0" class="expired-planned-banner glass-card">
+      <div class="banner-left">
+        <AlertCircle :size="18" class="text-orange" />
+        <span>提示：您有 <strong>{{ expiredPlannedRecords.length }}</strong> 条过往未结算的预选计划</span>
+      </div>
+      <div class="banner-actions">
+        <button class="banner-btn clear-btn" @click="handleClearExpiredPlanned">🧹 一键作废</button>
+      </div>
+    </div>
+
     <!-- 🏠 个人模式：消费统计看板 (Expense Dashboard) -->
     <div v-if="!isTeamMode" class="expense-dashboard glass-card">
+      <div class="dash-header-row">
+        <span class="dash-title">📊 个人饮食与财务看板</span>
+        <button class="export-csv-btn" @click="exportCSV" title="导出 Excel/CSV 格式记账明细单">
+          <FileSpreadsheet :size="14" />
+          <span>导出 CSV 账单</span>
+        </button>
+      </div>
+
       <div class="dash-row main-stats">
         <div class="stat-card total-card">
           <span class="stat-label">💰 本月伙食总支出</span>
@@ -30,6 +49,19 @@
         <div class="stat-card avg-card">
           <span class="stat-label">📊 日均开销 (近30天)</span>
           <span class="stat-val">￥{{ stats.dailyAvg.toFixed(2) }}</span>
+        </div>
+      </div>
+
+      <!-- 月度伙食预算消耗进度条 (若设置了预算) -->
+      <div v-if="settings.monthlyBudget && settings.monthlyBudget > 0" class="dash-row budget-row">
+        <div class="budget-info-row">
+          <span class="budget-label">月度预算进度：已用 ￥{{ stats.monthlyTotal.toFixed(0) }} / ￥{{ settings.monthlyBudget }}</span>
+          <span class="budget-percent" :class="budgetStatusClass">
+            {{ budgetPercent.toFixed(1) }}% {{ budgetStatusText }}
+          </span>
+        </div>
+        <div class="budget-progress-bg">
+          <div class="budget-progress-fill" :style="{ width: `${Math.min(budgetPercent, 100)}%` }" :class="budgetStatusClass"></div>
         </div>
       </div>
 
@@ -188,7 +220,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Calendar, Plus, UtensilsCrossed, Edit3, Trash2 } from 'lucide-vue-next';
+import { Calendar, Plus, UtensilsCrossed, Edit3, Trash2, FileSpreadsheet, AlertCircle } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useCloudSync } from '../composables/useCloudSync';
@@ -198,6 +230,22 @@ import { MEAL_CATEGORIES, type DailyRecord, type MealCategory, type RecordStatus
 const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings } = useBentoStore();
 const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
 const { pushToCloud } = useCloudSync();
+
+const todayStr = computed(() => new Date().toISOString().slice(0, 10));
+
+// 跨日过往未结预选记录
+const expiredPlannedRecords = computed(() => {
+  return personalRecords.value.filter(r => r.date < todayStr.value && r.status === 'planned');
+});
+
+function handleClearExpiredPlanned() {
+  if (confirm(`确认作废这 ${expiredPlannedRecords.value.length} 条过往未打卡的预选记录吗？`)) {
+    const expiredIds = new Set(expiredPlannedRecords.value.map(r => r.id));
+    expiredIds.forEach(id => deleteRecord(id));
+    pushToCloud(true);
+    if (settings.value.soundEnabled) soundEffects.playTick(700);
+  }
+}
 
 const isTeamMode = computed(() => settings.value.activeMode === 'team' && Boolean(team.value));
 const records = computed(() => isTeamMode.value ? teamHistory.value : personalRecords.value);
@@ -254,6 +302,51 @@ const stats = computed(() => {
 
   return { monthlyTotal, teaCount, teaTotal, dailyAvg, catTotalMap, catRatioMap };
 });
+
+const budgetPercent = computed(() => {
+  if (!settings.value.monthlyBudget || settings.value.monthlyBudget <= 0) return 0;
+  return (stats.value.monthlyTotal / settings.value.monthlyBudget) * 100;
+});
+
+const budgetStatusClass = computed(() => {
+  if (budgetPercent.value >= 100) return 'over-budget';
+  if (budgetPercent.value >= 80) return 'warning-budget';
+  return 'normal-budget';
+});
+
+const budgetStatusText = computed(() => {
+  if (budgetPercent.value >= 100) return '⚠️ 伙食费已超支';
+  if (budgetPercent.value >= 80) return '⚠️ 预算消耗过快';
+  return '健康';
+});
+
+function exportCSV() {
+  if (personalRecords.value.length === 0) {
+    alert('暂无饮食记账记录可导出');
+    return;
+  }
+
+  let csvContent = '\uFEFF日期,餐别,地点/餐品,打卡状态,实付金额(元),备注,标签\n';
+
+  personalRecords.value.forEach(r => {
+    const catName = getCatName(r.mealCategory);
+    const statusText = r.status === 'planned' ? '预选计划' : '已打卡';
+    const costText = r.cost !== undefined ? r.cost.toFixed(2) : '0';
+    const noteText = (r.note || '').replace(/"/g, '""');
+    const tagsText = (r.tags || []).join(';');
+
+    csvContent += `"${r.date}","${catName}","${r.locationName}","${statusText}","${costText}","${noteText}","${tagsText}"\n`;
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `WeeklyBento_记账明细_${new Date().toISOString().slice(0, 7)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  if (settings.value.soundEnabled) soundEffects.playTick(800);
+}
 
 function getCatColor(catKey: MealCategory) {
   switch (catKey) {

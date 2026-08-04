@@ -28,6 +28,8 @@ export interface BentoLocation {
   isDrawn: boolean; // 在当前轮次中是否已被抽中
   createdAt: number;
   mealCategories?: MealCategory[]; // 支持的餐池分类，不传默认全选/包含午餐
+  address?: string; // 详细地址（如：“科技园路 88 号 2 楼”）
+  mapUrl?: string; // 自定义导航跳转链接
 }
 
 export interface DailyRecord {
@@ -74,5 +76,6 @@ export interface AppSettings {
   activeMode: 'personal' | 'team'; // 当前激活模式
   personalSyncConfig?: CloudSyncConfig; // 个人云端同步设置
   cloudSync?: CloudSyncConfig; // 兼容逻辑
+  monthlyBudget?: number; // 月伙食预算 (0 或 undefined 表示未设置)
 }
 

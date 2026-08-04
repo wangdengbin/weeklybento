@@ -106,6 +106,21 @@
         </form>
       </div>
 
+      <!-- 💰 个人月度伙食预算设置 -->
+      <div class="config-card glass-card">
+        <h4 class="card-heading">
+          <Wallet :size="16" />
+          <span>💰 个人月度伙食预算</span>
+        </h4>
+        <p class="status-sub">设置您的每月膳食预算（元），记账看板将实时展现消费进度与超支预警。</p>
+        <div class="form-item">
+          <div class="form-row-inline">
+            <input type="number" v-model.number="settings.monthlyBudget" placeholder="例如：1500" class="input-field flex-1" />
+            <button class="btn-primary small-btn" @click="handleSaveBudget">保存预算</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 个人云端同步设置 (自定义 API Key / URL) -->
       <div class="config-card glass-card">
         <h4 class="card-heading">
@@ -197,6 +212,11 @@
               <label>标签 (逗号分隔)：</label>
               <input type="text" v-model="tagsInput" placeholder="如：快餐, 盖饭" class="input-field" />
             </div>
+          </div>
+
+          <div class="form-item">
+            <label>📍 详细地址 / 导航定位（配置后才显示导航按钮）：</label>
+            <input type="text" v-model="locForm.address" placeholder="如：科技园路88号首层 (选填)" class="input-field" />
           </div>
 
           <!-- 适用餐池多选框 -->
@@ -296,7 +316,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { 
-  Crown, LogOut, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, 
+  Crown, LogOut, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet,
   Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText 
 } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
@@ -406,6 +426,12 @@ async function handleConfirmBatchImport() {
   showBatchModal.value = false;
 }
 
+function handleSaveBudget() {
+  if (settings.value.soundEnabled) soundEffects.playTick(900);
+  pushToCloud(true);
+  alert('成功更新个人月度伙食预算！');
+}
+
 // 密码表单
 const pwdForm = ref({ oldPwd: '', newPwd: '' });
 
@@ -420,6 +446,8 @@ const locForm = ref<BentoLocation>({
   tags: [],
   priceRange: '￥20-35',
   recommendedDish: '',
+  address: '',
+  mapUrl: '',
   weight: 1,
   isDrawn: false,
   createdAt: Date.now()

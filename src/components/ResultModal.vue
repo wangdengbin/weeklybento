@@ -26,6 +26,14 @@
         <div class="recommend-box">
           <div class="box-title">💡 推荐菜品 / 建议：</div>
           <div class="box-content">{{ resultData?.location.recommendedDish || '好吃的招牌主食' }}</div>
+          
+          <!-- 仅在配置了地址或导航链接时展示地图导航 -->
+          <div v-if="resultData?.location.address || resultData?.location.mapUrl" class="nav-action-row">
+            <button class="nav-btn" type="button" @click="openNavigation(resultData.location)">
+              <Navigation :size="14" />
+              <span>📍 导航去吃 ({{ resultData.location.address || resultData.location.name }})</span>
+            </button>
+          </div>
         </div>
 
         <!-- 个人模式可选金额与记账快捷区 -->
@@ -66,7 +74,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { Check, RefreshCw, BookmarkPlus } from 'lucide-vue-next';
+import { Check, RefreshCw, BookmarkPlus, Navigation } from 'lucide-vue-next';
 import type { BentoLocation, MealCategory } from '../types';
 import { MEAL_CATEGORIES } from '../types';
 import { useBentoStore } from '../composables/useBentoStore';
@@ -94,6 +102,15 @@ watch(() => props.visible, (val) => {
     inputCost.value = undefined;
   }
 });
+
+function openNavigation(loc: BentoLocation) {
+  if (loc.mapUrl) {
+    window.open(loc.mapUrl, '_blank');
+    return;
+  }
+  const query = encodeURIComponent(loc.name + (loc.address ? ' ' + loc.address : ''));
+  window.open(`https://uri.amap.com/search?keyword=${query}`, '_blank');
+}
 
 // 保存为预选计划
 function handleSaveAsPlanned() {
@@ -312,5 +329,32 @@ function handleClose() {
 .btn-primary-gradient:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.nav-action-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #FFE4D6;
+}
+
+.nav-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #EFF6FF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: #DBEAFE;
 }
 </style>

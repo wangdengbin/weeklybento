@@ -1,3 +1,5 @@
+import type { MealCategory } from '../types';
+
 export interface ParsedLocationItem {
   name: string;
   emoji: string;
@@ -5,6 +7,7 @@ export interface ParsedLocationItem {
   priceRange: string;
   recommendedDish?: string;
   weight: number;
+  mealCategories?: MealCategory[];
 }
 
 /**
@@ -13,6 +16,10 @@ export interface ParsedLocationItem {
 export function autoPickEmoji(name: string, tags: string[]): string {
   const combined = (name + ' ' + tags.join(' ')).toLowerCase();
 
+  if (combined.includes('奶茶') || combined.includes('茶饮') || combined.includes('果茶')) return '🧋';
+  if (combined.includes('咖啡') || combined.includes('拿铁') || combined.includes('美式')) return '☕';
+  if (combined.includes('早茶') || combined.includes('包子') || combined.includes('粥')) return '🥟';
+  if (combined.includes('烧烤') || combined.includes('大排档')) return '🍢';
   if (combined.includes('麻辣烫') || combined.includes('串串') || combined.includes('冒菜')) return '🍢';
   if (combined.includes('拉面') || combined.includes('面条') || combined.includes('汤面') || combined.includes('螺蛳粉') || combined.includes('米粉') || combined.includes('粿条')) return '🍜';
   if (combined.includes('炒菜') || combined.includes('中餐') || combined.includes('小炒')) return '🍳';
@@ -29,12 +36,32 @@ export function autoPickEmoji(name: string, tags: string[]): string {
 }
 
 /**
+ * 智能判断地点适合的场景餐池
+ */
+export function autoPickMealCategories(name: string, tags: string[]): MealCategory[] {
+  const combined = (name + ' ' + tags.join(' ')).toLowerCase();
+  const cats: MealCategory[] = [];
+
+  if (combined.includes('奶茶') || combined.includes('茶') || combined.includes('咖啡') || combined.includes('拿铁') || combined.includes('饮品') || combined.includes('甜品') || combined.includes('果茶')) {
+    cats.push('tea');
+  }
+  if (combined.includes('包子') || combined.includes('豆浆') || combined.includes('粥') || combined.includes('早茶') || combined.includes('煎饼') || combined.includes('三明治') || combined.includes('早餐')) {
+    cats.push('breakfast');
+  }
+  if (combined.includes('串串') || combined.includes('烧烤') || combined.includes('大排档') || combined.includes('宵夜') || combined.includes('夜宵') || combined.includes('小龙虾')) {
+    cats.push('night');
+  }
+
+  // 默认正餐
+  if (cats.length === 0 || (!combined.includes('奶茶') && !combined.includes('咖啡'))) {
+    cats.push('lunch', 'dinner');
+  }
+
+  return Array.from(new Set(cats));
+}
+
+/**
  * 智能解析多行批量菜单文本
- * 支持格式示例：
- * 1. 汆悦麻辣烫 （标签：麻辣烫, 自选, 汤底）
- * 2. 丰香园 (标签: 中餐炒菜, 炒菜)
- * 3. 刘一手 | 自助菜, 快餐 | ￥20-30
- * 4. 平安美食城
  */
 export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
   if (!rawText || !rawText.trim()) return [];
@@ -51,13 +78,11 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
     let priceRange = '￥20-35';
     let recommendedDish = '';
 
-    // 正则提取括号内的 标签：xxx 或 标签: xxx
     const bracketMatch = trimmed.match(/^([^(（]+)[(（]([^)）]+)[)）]$/);
     if (bracketMatch) {
       name = bracketMatch[1].trim();
       const innerText = bracketMatch[2].trim();
 
-      // 解析括号内部内容 (可能包含 标签：xxx | 价格：xxx | 推荐：xxx)
       const parts = innerText.split(/[|丨]/);
       for (const part of parts) {
         const item = part.trim();
@@ -69,12 +94,10 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
         } else if (/^(推荐[：:]|招牌[：:]?)/i.test(item)) {
           recommendedDish = item.replace(/^(推荐[：:]|招牌[：:]?)/i, '').trim();
         } else if (!tags.length) {
-          // 如果没有带"标签："前缀，直接按逗号切分当做标签
           tags = item.split(/[,，、\s]+/).filter(Boolean);
         }
       }
     } else if (trimmed.includes('|') || trimmed.includes('丨')) {
-      // 管道符分隔格式：地点名称 | 标签1, 标签2 | ￥20-35
       const parts = trimmed.split(/[|丨]/);
       name = parts[0].trim();
       if (parts[1]) {
@@ -84,19 +107,20 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
         priceRange = parts[2].trim();
       }
     } else {
-      // 纯文本单行：只包含地点名称
       name = trimmed;
       tags = ['推荐美食'];
     }
 
     if (name) {
+      const formattedTags = tags.length > 0 ? tags : ['推荐美食'];
       results.push({
         name,
-        emoji: autoPickEmoji(name, tags),
-        tags: tags.length > 0 ? tags : ['推荐美食'],
+        emoji: autoPickEmoji(name, formattedTags),
+        tags: formattedTags,
         priceRange,
         recommendedDish,
         weight: 1,
+        mealCategories: autoPickMealCategories(name, formattedTags),
       });
     }
   }
