@@ -9,8 +9,8 @@
         </span>
       </div>
 
-      <!-- 管理员补录历史记录按钮 -->
-      <button v-if="!isTeamMode && isAdminLoggedIn" class="btn-secondary add-rec-btn" @click="openAddModal">
+      <!-- 补录历史记录按钮 -->
+      <button v-if="canAddRecord" class="btn-secondary add-rec-btn" @click="openAddModal">
         <Plus :size="16" />
         <span>补录记录</span>
       </button>
@@ -44,22 +44,22 @@
           </div>
         </div>
 
-        <!-- 个人模式管理员操作 -->
-        <div v-if="!isTeamMode && isAdminLoggedIn" class="admin-actions">
-          <button class="action-btn edit-btn" @click="openEditModal(rec)" title="管理员修改记录">
+        <!-- 记录编辑/删除操作 -->
+        <div v-if="canManageRecord" class="admin-actions">
+          <button class="action-btn edit-btn" @click="openEditModal(rec)" title="修改记录">
             <Edit3 :size="16" />
           </button>
-          <button class="action-btn delete-btn" @click="confirmDelete(rec.id)" title="管理员删除记录">
+          <button class="action-btn delete-btn" @click="confirmDelete(rec.id)" title="删除记录">
             <Trash2 :size="16" />
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 管理员编辑/补录弹窗 Modal -->
+    <!-- 编辑/补录弹窗 Modal -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal-content">
-        <h3 class="modal-title">{{ isEditing ? '修改午餐记录 (管理员)' : '新增午餐记录 (管理员)' }}</h3>
+        <h3 class="modal-title">{{ isEditing ? '修改午餐记录' : (isTeamMode ? '团队补录午餐记录' : '新增午餐记录 (管理员)') }}</h3>
         
         <form @submit.prevent="saveRecord" class="edit-form">
           <div class="form-item">
@@ -83,7 +83,7 @@
 
           <div class="modal-buttons">
             <button type="button" class="btn-secondary" @click="showModal = false">取消</button>
-            <button type="submit" class="btn-primary">保存修改</button>
+            <button type="submit" class="btn-primary">保存记录</button>
           </div>
         </form>
       </div>
@@ -100,12 +100,16 @@ import { useAdmin } from '../composables/useAdmin';
 import { soundEffects } from '../composables/useAudio';
 import type { DailyRecord } from '../types';
 
-const { records: personalRecords, locations, updateRecord, deleteRecord, addDailyRecord, settings } = useBentoStore();
-const { team, history: teamHistory } = useTeamWorkspace();
+const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, addDailyRecord, settings } = useBentoStore();
+const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
 const { isAdminLoggedIn } = useAdmin();
 
 const isTeamMode = computed(() => settings.value.activeMode === 'team' && Boolean(team.value));
 const records = computed(() => isTeamMode.value ? teamHistory.value : personalRecords.value);
+const locations = computed(() => isTeamMode.value ? teamLocations.value : personalLocations.value);
+
+const canAddRecord = computed(() => isTeamMode.value || (!isTeamMode.value && isAdminLoggedIn.value));
+const canManageRecord = computed(() => isTeamMode.value || (!isTeamMode.value && isAdminLoggedIn.value));
 
 const showModal = ref(false);
 const isEditing = ref(false);
@@ -121,14 +125,24 @@ const form = ref({
 });
 
 function formatDate(dateStr: string) {
-  const today = new Date().toISOString().slice(0, 10);
-  if (dateStr === today) return '今天';
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  let dateObj: Date;
+  if (parts.length === 3) {
+    dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  } else {
+    dateObj = new Date(dateStr);
+  }
   
-  const dateObj = new Date(dateStr);
-  const month = dateObj.getMonth() + 1;
-  const day = dateObj.getDate();
+  const todayStr = new Date().toISOString().slice(0, 10);
   const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const week = weekDays[dateObj.getDay()];
+  const month = dateObj.getMonth() + 1;
+  const day = dateObj.getDate();
+
+  if (dateStr === todayStr) {
+    return `今天 (${week})`;
+  }
   return `${month}月${day}日 (${week})`;
 }
 
@@ -171,32 +185,52 @@ function onLocationSelectChange() {
   }
 }
 
-function saveRecord() {
+async function saveRecord() {
   if (settings.value.soundEnabled) soundEffects.playTick(800);
-  if (isEditing.value) {
-    updateRecord({
-      id: form.value.id,
-      date: form.value.date,
-      locationId: form.value.locationId,
-      locationName: form.value.locationName,
-      emoji: form.value.emoji,
-      tags: form.value.tags,
-      drawnAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-      note: form.value.note
-    });
-  } else {
-    const loc = locations.value.find(l => l.id === form.value.locationId);
-    if (loc) {
-      addDailyRecord(loc, form.value.date, form.value.note);
+  try {
+    if (isTeamMode.value) {
+      if (!form.value.locationId) {
+        alert('请选择地点');
+        return;
+      }
+      await addOrUpdateTeamRecord(form.value.locationId, form.value.date, form.value.note);
+    } else {
+      if (isEditing.value) {
+        updateRecord({
+          id: form.value.id,
+          date: form.value.date,
+          locationId: form.value.locationId,
+          locationName: form.value.locationName,
+          emoji: form.value.emoji,
+          tags: form.value.tags,
+          drawnAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+          note: form.value.note
+        });
+      } else {
+        const loc = locations.value.find(l => l.id === form.value.locationId);
+        if (loc) {
+          addDailyRecord(loc, form.value.date, form.value.note);
+        }
+      }
     }
+    showModal.value = false;
+  } catch (e: any) {
+    alert(e.message || '保存记录失败');
   }
-  showModal.value = false;
 }
 
-function confirmDelete(id: string) {
-  if (confirm('管理员确认：是否删除此条记录？')) {
+async function confirmDelete(id: string) {
+  if (confirm('确认删除此条记录？')) {
     if (settings.value.soundEnabled) soundEffects.playTick(400);
-    deleteRecord(id);
+    try {
+      if (isTeamMode.value) {
+        await deleteTeamRecord(id);
+      } else {
+        deleteRecord(id);
+      }
+    } catch (e: any) {
+      alert(e.message || '删除失败');
+    }
   }
 }
 </script>

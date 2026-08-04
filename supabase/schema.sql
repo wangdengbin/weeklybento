@@ -36,6 +36,7 @@ create table public.team_draws (
   business_date date not null default current_date,
   drawn_by uuid not null references auth.users(id),
   drawn_at timestamptz not null default now(),
+  note text,
   unique (team_id, business_date)
 );
 
@@ -77,6 +78,9 @@ create policy "members insert locations" on public.team_locations for insert wit
 create policy "members update locations" on public.team_locations for update using (public.is_team_member(team_id));
 create policy "members delete locations" on public.team_locations for delete using (public.is_team_member(team_id));
 create policy "members read draws" on public.team_draws for select using (public.is_team_member(team_id));
+create policy "members insert draws" on public.team_draws for insert with check (public.is_team_member(team_id));
+create policy "members update draws" on public.team_draws for update using (public.is_team_member(team_id));
+create policy "members delete draws" on public.team_draws for delete using (public.is_team_member(team_id));
 
 create or replace function public.create_team(p_name text, p_locations jsonb default '[]'::jsonb)
 returns jsonb language plpgsql security definer set search_path = public, extensions

@@ -78,7 +78,7 @@ async function loadWorkspace() {
       tags: loc?.tags || [],
       priceRange: loc?.priceRange || '',
       recommendedDish: loc?.recommendedDish || '',
-      note: isMe ? '团队协同 Roll (由我选定)' : '团队协同 Roll (团队成员选定)',
+      note: draw.note || (isMe ? '团队协同 Roll (由我选定)' : '团队协同 Roll (团队成员选定)'),
       drawnAt: new Date(draw.drawn_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     };
   });
@@ -318,6 +318,31 @@ async function deleteTeam() {
   }
 }
 
+async function addOrUpdateTeamRecord(locationId: string, date: string, note?: string) {
+  if (!supabase || !team.value) throw new Error('请先创建或加入团队');
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentUserId = sessionData.session?.user?.id;
+  if (!currentUserId) throw new Error('身份校验失败');
+
+  const { error } = await supabase.from('team_draws').upsert({
+    team_id: team.value.id,
+    location_id: locationId,
+    business_date: date,
+    drawn_by: currentUserId,
+    note: note || '团队补录记录',
+  }, { onConflict: 'team_id,business_date' });
+
+  if (error) throw error;
+  await loadWorkspace();
+}
+
+async function deleteTeamRecord(id: string) {
+  if (!supabase || !team.value) throw new Error('请先创建或加入团队');
+  const { error } = await supabase.from('team_draws').delete().eq('id', id).eq('team_id', team.value.id);
+  if (error) throw error;
+  await loadWorkspace();
+}
+
 const canManage = computed(() => team.value?.role === 'owner' || team.value?.role === 'admin');
 const isOwner = computed(() => team.value?.role === 'owner');
 
@@ -343,9 +368,12 @@ export function useTeamWorkspace() {
     updateLocation,
     deleteLocation,
     batchDeleteLocations,
+    addOrUpdateTeamRecord,
+    deleteTeamRecord,
     leaveTeam,
     deleteTeam,
     refresh: loadWorkspace,
   };
 }
+
 
