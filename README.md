@@ -94,6 +94,8 @@ WeeklyBento/
 ├── package.json                # 项目依赖与运行脚本
 ├── vite.config.ts              # Vite 构建配置
 ├── README.md                   # 项目使用与部署说明
+├── doc/                        # 项目详细文档目录
+│   └── GAMEPLAY_AND_RULES.md   # 核心玩法规则与技术复盘文档
 ├── supabase/schema.sql         # 团队数据表、RLS、RPC 与 Realtime 配置
 └── src/
     ├── main.ts                 # Vue 3 入口
