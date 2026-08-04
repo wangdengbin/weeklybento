@@ -103,21 +103,33 @@
 
                 <!-- 专属文本复制区 (仅管理人员可见) -->
                 <div v-if="canManage" class="share-box">
-                  <label class="share-label">
-                    <span>🔗 专属邀请链接 (全选后可直接 Ctrl+C 或长按复制)</span>
-                  </label>
+                  <div class="share-header-row">
+                    <label class="share-label">
+                      <span>🔗 专属邀请链接 (全选后可直接 Ctrl+C 或长按复制)</span>
+                    </label>
+                    <button
+                      class="refresh-invite-btn"
+                      type="button"
+                      title="重置并生成新的邀请链接"
+                      :disabled="isGeneratingInvite"
+                      @click="generateInviteText(true)"
+                    >
+                      <RefreshCw :size="12" :class="{ 'spin-icon': isGeneratingInvite }" />
+                      刷新链接
+                    </button>
+                  </div>
                   <textarea
                     ref="inviteTextArea"
                     v-model="inviteText"
                     readonly
                     rows="2"
                     class="invite-textarea"
-                    placeholder="正在生成邀请链接..."
+                    :placeholder="isGeneratingInvite ? '正在生成邀请链接...' : '暂无邀请链接'"
                     @click="selectInviteText"
                   ></textarea>
 
                   <div class="share-btn-row">
-                    <button class="primary-action share-main-btn" type="button" :disabled="isLoading || !inviteText" @click="shareTeam">
+                    <button class="primary-action share-main-btn" type="button" :disabled="isLoading || isGeneratingInvite || !inviteText" @click="shareTeam">
                       <Share2 :size="16" />
                       {{ copied ? '已成功复制！' : '复制邀请文本' }}
                     </button>
@@ -202,7 +214,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn } from 'lucide-vue-next';
+import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useAuth } from '../composables/useAuth';
@@ -212,7 +224,7 @@ const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits(['close', 'open-auth-modal']);
 const { locations: personalLocations, switchMode } = useBentoStore();
 const { isAnonymous } = useAuth();
-const { team, myTeams, members, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl, openTeam, deleteTeam, leaveTeam, switchActiveTeam } = useTeamWorkspace();
+const { team, myTeams, members, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl, buildInviteUrl, openTeam, deleteTeam, leaveTeam, switchActiveTeam } = useTeamWorkspace();
 
 const actionMode = ref<'create' | 'join'>('create');
 const teamName = ref('');
@@ -220,6 +232,7 @@ const joinPublicId = ref('');
 const usePersonalMenu = ref(true);
 const copied = ref(false);
 const inviteText = ref('');
+const isGeneratingInvite = ref(false);
 const inviteTextArea = ref<HTMLTextAreaElement | null>(null);
 
 function getRoleLabel(role: string) {
@@ -231,22 +244,36 @@ function handleOpenAuth() {
   emit('open-auth-modal');
 }
 
-async function generateInviteText() {
+async function generateInviteText(forceRefresh = false) {
   if (!team.value) return;
+  isGeneratingInvite.value = true;
   try {
-    const url = await createInviteUrl();
+    const url = await createInviteUrl(forceRefresh);
     const title = team.value.name || '午餐搭子圈';
     inviteText.value = `🍱 邀请你加入【${title}】！点击链接一起在线选餐、实时同步菜单与打卡记录：\n${url}`;
   } catch (e) {
     console.error('Generate invite url error:', e);
+    if (team.value) {
+      const fallbackUrl = buildInviteUrl(team.value.public_id);
+      const title = team.value.name || '午餐搭子圈';
+      inviteText.value = `🍱 邀请你加入【${title}】(搭子圈号: ${team.value.public_id})！点击链接一起在线选餐、实时同步菜单与打卡记录：\n${fallbackUrl}`;
+    }
+  } finally {
+    isGeneratingInvite.value = false;
   }
 }
 
-watch(() => props.visible, (val) => {
-  if (val && team.value && canManage.value && !isAnonymous.value) {
-    generateInviteText();
-  }
-}, { immediate: true });
+watch(
+  [() => props.visible, () => team.value?.public_id, () => canManage.value, () => isAnonymous.value],
+  async ([visible, publicId, canMgr, anon]) => {
+    if (visible && publicId && canMgr && !anon) {
+      await generateInviteText();
+    } else if (!visible) {
+      inviteText.value = '';
+    }
+  },
+  { immediate: true }
+);
 
 function selectInviteText() {
   if (inviteTextArea.value) {
@@ -474,14 +501,39 @@ async function handleLeaveTeam(t: { id: string; name: string }) {
 .member-role-badge.owner { background: #FEF3C7; color: #D97706; }
 .member-role-badge.admin { background: #E0E7FF; color: #4338CA; }
 
-.share-box {
+.share-header-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: #FFFFFF;
-  border: 1px solid #FFEDD5;
-  padding: 10px;
-  border-radius: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.refresh-invite-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  color: #C2410C;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.refresh-invite-btn:hover:not(:disabled) {
+  background: #FFEDD5;
+}
+.refresh-invite-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .share-label { font-size: 11px; font-weight: 700; color: #C2410C; }
 .invite-textarea {

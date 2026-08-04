@@ -310,16 +310,28 @@ async function createTeam(name: string, seedLocations: BentoLocation[]) {
   }
 }
 
-function buildInviteUrl(publicId: string, token: string) {
+function buildInviteUrl(publicId: string, token?: string) {
   const url = new URL(window.location.href);
   url.search = '';
   url.searchParams.set('team', publicId);
-  url.searchParams.set('invite', token);
+  if (token) {
+    url.searchParams.set('invite', token);
+  }
   return url.toString();
 }
 
-async function createInviteUrl() {
+async function createInviteUrl(forceRotate = false) {
   if (!supabase || !team.value) throw new Error('请先创建或加入团队');
+  
+  if (!forceRotate && pendingInviteUrl.value) {
+    try {
+      const parsed = new URL(pendingInviteUrl.value);
+      if (parsed.searchParams.get('team') === team.value.public_id && parsed.searchParams.get('invite')) {
+        return pendingInviteUrl.value;
+      }
+    } catch (e) {}
+  }
+
   const { data, error } = await supabase.rpc('rotate_team_invite', { p_team_id: team.value.id });
   if (error) throw error;
   pendingInviteUrl.value = buildInviteUrl(team.value.public_id, data as string);
@@ -523,6 +535,7 @@ export function useTeamWorkspace() {
     openTeam,
     createTeam,
     createInviteUrl,
+    buildInviteUrl,
     roll,
     addLocation,
     batchAddLocations,

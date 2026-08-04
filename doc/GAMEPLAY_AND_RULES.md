@@ -1,33 +1,36 @@
 # 🍱 周周便当 (WeeklyBento) 玩法规则与复盘文档
 
-> 本文档用于归纳总结《周周便当》系统的核心玩法、算法规则、团队协同逻辑与技术架构，方便后续产品复盘与维护扩展。
+> 本文档用于归纳总结《周周便当》系统的核心玩法、算法规则、多团队协同逻辑、安全邀请机制与技术架构，方便后续产品复盘与维护扩展。
 
 ---
 
 ## 📌 一、 项目概览
 
-《周周便当》是一款致力于解决**“今天中午吃什么”**终极难题的随机午餐决策与团队协同工具。系统兼顾个人独立使用与团队多人协同，具备高颜值 3D 老虎机滚轮动画、音效合成与全屏撒花特效。
+《周周便当》是一款致力于解决**“今天中午吃什么”**终极难题的随机午餐决策与团队协同工具。系统兼顾个人独立使用与多团队多人协同，具备高颜值 3D 老虎机滚轮动画、Web Audio 合成音效与全屏撒花特效。
 
 ```mermaid
 mindmap
   root((周周便当 WeeklyBento))
     运行模式
       🏠 个人独享模式 (本地/云端备份)
-      👥 团队协同模式 (Supabase 实时同步)
+      👥 多团队协同模式 (Supabase 实时长连接)
+        🏢 支持最多 3 个搭子圈
+        🔄 界面一键无缝切换
     核心玩法
-      加权随机 Roll
-      轮次不重复
-      📅 按周不重复
-      打卡日志记录
+      🎯 加权随机 Roll
+      🔄 轮次去重机制
+      📅 按周不重复 (自然周自动清空)
+      📝 每日打卡与历史补录
     团队协同
-      当日结果锁定
-      全员重新选定 (Re-roll)
-      全员协作菜单
-      解散 / 退出团队
+      🔒 当日结果锁定
+      🎲 全员重新选定 (Re-roll)
+      📋 全员协作菜单
+      🔗 专属安全邀请链接 (支持 Token 旋转与智能降级)
+      🗑️ 解散 / 退出团队
     账号体系
       👻 默认游客免登录
-      👤 邮箱注册绑定
-      📱 手机电脑多端同号同步
+      👤 邮箱注册绑定 (解写全端实时同步)
+      🔒 匿名游客搭子圈限制与绑定引导
 ```
 
 ---
@@ -35,7 +38,7 @@ mindmap
 ## 🎲 二、 核心玩法与选餐算法规则
 
 ### 1. 加权随机 Roll 算法 (Weighted Random Selection)
-- 每个午餐地点均具备权重值 `weight`（默认值 `1`）。
+- 每个午餐地点均具备权重值 `weight`（默认值 `1`，范围可自定义）。
 - **抽取逻辑**：系统计算待抽池中所有可用地点的权重总和 `totalWeight`，生成随机数 `target = Math.random() * totalWeight`，以此进行加权概率抽签。
 
 ### 2. 轮次去重机制 (Round Anti-Repeat)
@@ -45,11 +48,11 @@ mindmap
 ### 3. 📅 按周不重复模式 (Weekly No-Repeat)
 - **规则**：以自然周（**周一 00:00 至 周日 23:59**）为单位，自动识别并过滤本周内已经抽中吃过的餐厅。
 - **自动保底逻辑**：若本周内已将待抽池中的未吃地点全吃了一遍，系统会自动退回基础池抽取，防止待抽池变空。
-- **无缝重置**：新的一周（周一）开始时，本周历史去重列表自动清空刷新。
+- **无缝重置**：新的一周（周一 00:00）开始时，本周历史去重列表自动清空刷新。
 
 ---
 
-## 👥 三、 团队协同模式 (Team Workspace)
+## 👥 三、 团队协同与多搭子圈模式 (Multi-Team Workspace)
 
 团队模式基于 **Supabase Realtime 实时长连接** 构建，专为公司部门、干饭小分队设计。
 
@@ -68,34 +71,39 @@ sequenceDiagram
     Supabase Realtime-->>成员A: 广播今日选定结果
     Supabase Realtime-->>成员B: 100ms 内自动同步呈现【今日已选定】卡片！
 
-    Note over 成员A, 成员B: 场景二：全员重新选定 (Re-roll)
-    成员B->>数据库: 点击【重新选定 (重抽并同步团队)】
-    数据库-->>Supabase Realtime: 更新今日选定结果为新餐厅
-    Supabase Realtime-->>成员A: 实时更新为新选定的午餐！
+    Note over 成员A, 成员B: 场景二：生成与分享专属邀请链接
+    成员A->>数据库: 点击【专属邀请链接 / 刷新链接】
+    数据库->>数据库: 调用 rotate_team_invite() 生成安全 Token
+    成员A->>成员B: 发送邀请链接 (?team=public_id&invite=token)
+    成员B->>数据库: 点击链接加入，触发 join_team() RPC
+    Supabase Realtime-->>成员A: 实时更新团队成员列表！
 ```
 
-### 1. 当日选定结果锁定
-- 每日首个 Roll 签的团队成员将为全团队锁定今日午餐结果。
-- 其他成员打开应用时，直接呈现 **“👥 团队协同模式 · 今日已选定”** 卡片，展示餐厅名称、推荐菜品、人均消费及摇号人标识。
+### 1. 🏢 多搭子圈创建与无缝切换 (上限 3 个)
+- **配额管理**：单个正式账号最多可同时创建或加入 **3 个午餐搭子圈**。
+- **快速切换**：在“搭子圈”弹窗中列出所有已加入的团队卡片，点击【切换】按钮即可无缝切换当前激活的搭子圈及对应菜单。
+- **同步个人菜单**：创建新搭子圈时，可选择勾选“同步我当前的个人地点作为初始菜单”，快速搭建团队菜单。
 
-### 2. 🔄 全员可重新选定 (Re-roll)
-- **规则**：团队内所有成员均具备重抽权限。
-- 若团队对当前结果不满意，任何成员点击 **【重新选定】**，均可重新随机 Roll 签并实时同步给全团队。
+### 2. 🔗 专属安全邀请链接与智能降级
+- **安全邀请 Token**：管理员/所有者点击生成邀请链接时，系统调用 `rotate_team_invite` RPC 生成加密的 `invite` Token，新链接包含团队号及验证码（格式：`?team=PUBLIC_ID&invite=TOKEN`）。
+- **缓存与防失效**：系统优先复用已导出的有效 Token 链接，避免频繁打开弹窗导致旧邀请链接失效；同时提供【刷新链接】按钮供手动重置。
+- **智能容错降级**：若加密 Token 旋转失败（如权限限制或网络波动），系统会自动平滑降级生成基于团队号 (`public_id`) 的基础邀请链接，确保邀请功能 100% 稳定可用。
 
-### 3. 📝 全员协作菜单管理
-- 团队内所有成员均可在管理面板中：
-  - 添加新午餐地点；
-  - 修改地点名称、Emoji、标签与推荐菜；
-  - 批量文本导入（支持多行粘贴格式如：`地点名称 （标签：标签1, 标签2）`）；
-  - 恢复/填充系统预设 16+ 经典美食地点池。
+### 3. 🔒 匿名游客限制与引导
+- **权限拦截**：匿名游客（Guest）身份无法创建或加入搭子圈。
+- **温和引导**：当游客打开团队弹窗时，系统呈现专属引导 Banner，一键引导跳转登录/绑定邮箱账号。
 
-### 4. 📅 历史记录与团队补录
-- **📅 每日记录展示周几**：所有历史记录与今日打卡记录，均精准包含“周几”（例如：`今天 (周二)`、`8月3日 (周一)`）。
-- **📅 团队协同补录**：团队模式下支持团队成员自由补录过去或今日的选餐打卡记录，并可对团队历史记录进行修改与删除，实时广播全员同步。
+### 4. 当日选定结果锁定与 🔄 全员 Re-roll
+- **首 Roll 锁定**：每日首个 Roll 签的团队成员将为全团队锁定今日午餐结果，其余成员打开页面直接展示选定结果。
+- **全员 Re-roll**：若团队对当前结果不满意，任何成员均可点击 **【重新选定】** 触发重抽，全员页面实时更新。
 
-### 5. 🔥 团队解散与 🚪 退出
-- **解散团队 (Owner)**：团队创建所有者可在团队弹窗中点击【解散团队】，安全删除团队下所有云端数据，并自动将所有成员恢复为个人模式。
-- **退出团队 (Member)**：普通成员可选择【退出团队】，主动解除团队关联。
+### 5. 📝 全员协作菜单与补录打卡
+- **菜单管理**：团队全员支持添加、编辑、删除地点，支持批量文本导入及恢复预设 16+ 美食池。
+- **打卡与补录**：支持精准显示周几（如 `今天 (周二)`），支持自由补录或修正过去日期的团队打卡记录，修改实时广播全员同步。
+
+### 6. 🔥 团队解散与 🚪 退出
+- **解散团队 (Owner)**：团队创建所有者可点击【解散搭子圈】，清除云端数据，全员自动切回个人模式。
+- **退出团队 (Member)**：普通成员可选择【退出搭子圈】，主动解除团队关联。
 
 ---
 
@@ -103,20 +111,16 @@ sequenceDiagram
 
 支持 **“游客免登录 + 可选注册绑定”** 的无缝账号体验：
 
-| 身份类型 | 登录方式 | 数据同步范围 | 适用的使用场景 |
+| 身份类型 | 登录方式 | 数据同步范围 | 团队协同权限 |
 | :--- | :--- | :--- | :--- |
-| **👻 匿名游客 (Guest)** | 首次打开自动生成 | 仅限当前浏览器 `localStorage` | 零门槛即开即用、单设备体验 |
-| **👤 邮箱注册账号 (Authenticated)** | 邮箱 + 密码 登录 | **手机、电脑、多设备全端实时同步** | 跨设备使用、长期团队协同 |
-
-### 无缝升级流程：
-1. **电脑端**：游客身份下点击【注册/绑定】，输入邮箱密码升级为正式账号，原有数据自动关联。
-2. **手机端**：打开网页点击【登录】，输入同一邮箱密码，**手机与电脑秒级识别为同一用户**，团队与菜单完全同步。
+| **👻 匿名游客 (Guest)** | 首次打开自动生成 | 仅限当前浏览器 `localStorage` | 仅限个人模式，不可使用搭子圈 |
+| **👤 正式注册账号 (Authenticated)** | 邮箱 + 密码 登录 | **手机、电脑多端全域实时同步** | 支持创建/加入最多 3 个搭子圈 |
 
 ---
 
 ## 🛡️ 五、 数据库权限 (RLS) 架构复盘
 
-Supabase 数据库使用严格的 **行级安全策略 (Row Level Security)** 进行隔离保护：
+Supabase 数据库使用严格的 **行级安全策略 (Row Level Security)** 与存储过程进行保护：
 
 ```sql
 -- 团队成员鉴权 helper 函数
@@ -126,13 +130,17 @@ as $$
   select exists (select 1 from team_members where team_id = target_team_id and user_id = auth.uid());
 $$;
 
--- RLS 读写策略
-create policy "members read teams" on public.teams for select using (public.is_team_member(id));
-create policy "owners delete teams" on public.teams for delete using (exists (select 1 from team_members where team_id = id and user_id = auth.uid() and role = 'owner'));
-create policy "members insert locations" on public.team_locations for insert with check (public.is_team_member(team_id));
-create policy "members update locations" on public.team_locations for update using (public.is_team_member(team_id));
-create policy "members delete locations" on public.team_locations for delete using (public.is_team_member(team_id));
-create policy "members read draws" on public.team_draws for select using (public.is_team_member(team_id));
+-- 安全旋转团队邀请 Token
+create or replace function public.rotate_team_invite(p_team_id uuid)
+returns text language plpgsql security definer set search_path = public, extensions
+as $$
+declare new_token text := encode(gen_random_bytes(18), 'hex');
+begin
+  if not public.can_manage_team(p_team_id) then raise exception 'manager permission required'; end if;
+  update teams set invite_token_hash = encode(digest(new_token, 'sha256'), 'hex') where id = p_team_id;
+  return new_token;
+end;
+$$;
 ```
 
 ---
