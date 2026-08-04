@@ -9,6 +9,48 @@ const lastSyncedAt = ref<string>('');
 const ENV_API_URL = import.meta.env.VITE_JSONBIN_API_URL || '';
 const ENV_API_KEY = import.meta.env.VITE_JSONBIN_API_KEY || '';
 
+/**
+ * 自动双重 Header 兼容请求：
+ * JSONBin 如果在请求头中同时存在 X-Master-Key 与 X-Access-Key，会强制校验 X-Master-Key。
+ * 此函数先使用 X-Master-Key 请求，若遇到 401/403，自动无缝切换为 X-Access-Key 重新请求，确保 Master Key 和 Access Key 均能 100% 成功。
+ */
+async function fetchJsonbinWithFallback(url: string, method: string, payload?: any): Promise<Response> {
+  if (!ENV_API_URL || !ENV_API_KEY) {
+    throw new Error('环境变量中未配置 JSONBin 凭据');
+  }
+
+  // 第一次尝试：使用 X-Master-Key
+  const headersMaster: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Master-Key': ENV_API_KEY,
+  };
+
+  let resp = await fetch(url, {
+    method,
+    headers: headersMaster,
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+
+  // 如果遇到 401 / 403 身份不匹配，自动无缝降级重试 X-Access-Key
+  if (resp.status === 401 || resp.status === 403) {
+    const headersAccess: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Access-Key': ENV_API_KEY,
+    };
+    const respRetry = await fetch(url, {
+      method,
+      headers: headersAccess,
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+
+    if (respRetry.ok) {
+      return respRetry;
+    }
+  }
+
+  return resp;
+}
+
 export function useCloudSync() {
   const { locations, records, importDataJSON } = useBentoStore();
 
@@ -20,7 +62,7 @@ export function useCloudSync() {
 
     if (!silent) {
       isSyncing.value = true;
-      syncLog.value = '正在上传数据至云端...';
+      syncLog.value = '正在保存至云端...';
     }
 
     const payload = {
@@ -30,15 +72,7 @@ export function useCloudSync() {
     };
 
     try {
-      const resp = await fetch(ENV_API_URL, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': ENV_API_KEY,
-          'X-Access-Key': ENV_API_KEY,
-        },
-        body: JSON.stringify(payload),
-      });
+      const resp = await fetchJsonbinWithFallback(ENV_API_URL, 'PUT', payload);
 
       if (resp.ok) {
         lastSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -46,8 +80,8 @@ export function useCloudSync() {
         isSyncing.value = false;
         return { success: true, message: '成功推送数据到 JSONBin 云数据库！' };
       } else {
-        const err = await resp.text();
-        throw new Error(`JSONBin 响应 HTTP ${resp.status}: ${err}`);
+        const errText = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${errText}`);
       }
     } catch (e: any) {
       isSyncing.value = false;
@@ -68,16 +102,11 @@ export function useCloudSync() {
     }
 
     try {
-      const resp = await fetch(ENV_API_URL, {
-        method: 'GET',
-        headers: {
-          'X-Master-Key': ENV_API_KEY,
-          'X-Access-Key': ENV_API_KEY,
-        },
-      });
+      const resp = await fetchJsonbinWithFallback(ENV_API_URL, 'GET');
 
       if (!resp.ok) {
-        throw new Error(`HTTP 请求失败 ${resp.status}`);
+        const errText = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${errText}`);
       }
 
       const data = await resp.json();
