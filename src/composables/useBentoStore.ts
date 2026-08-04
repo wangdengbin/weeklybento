@@ -47,10 +47,19 @@ function loadRecords(): DailyRecord[] {
   return [];
 }
 
+function getMondayDateString(): string {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(monday);
+}
+
 function loadSettings(): AppSettings {
   const defaultSettings: AppSettings = {
     adminPassword: 'admin888',
     antiRepeatMode: 'round',
+    weeklyNoRepeat: true,
     soundEnabled: true,
     activeMode: 'personal',
     personalSyncConfig: {
@@ -87,7 +96,19 @@ watch(settings, (val) => {
 }, { deep: true });
 
 export function useBentoStore() {
-  const availablePool = computed(() => locations.value.filter(loc => !loc.isDrawn));
+  const availablePool = computed(() => {
+    const basePool = locations.value.filter(loc => !loc.isDrawn);
+    if (settings.value.weeklyNoRepeat !== false) {
+      const mondayStr = getMondayDateString();
+      const drawnIdsInWeek = new Set(
+        records.value.filter(r => r.date >= mondayStr).map(r => r.locationId)
+      );
+      const weeklyPool = basePool.filter(loc => !drawnIdsInWeek.has(loc.id));
+      // 如果本周已将未吃的地点全吃了一遍，自动退回基础池
+      return weeklyPool.length > 0 ? weeklyPool : basePool;
+    }
+    return basePool;
+  });
   const drawnList = computed(() => locations.value.filter(loc => loc.isDrawn));
   const isPoolEmpty = computed(() => availablePool.value.length === 0);
 

@@ -73,9 +73,9 @@ create policy "owners delete teams" on public.teams for delete using (
 create policy "members read memberships" on public.team_members for select using (public.is_team_member(team_id));
 create policy "members delete self membership" on public.team_members for delete using (user_id = auth.uid());
 create policy "members read locations" on public.team_locations for select using (public.is_team_member(team_id));
-create policy "admins insert locations" on public.team_locations for insert with check (public.can_manage_team(team_id));
-create policy "admins update locations" on public.team_locations for update using (public.can_manage_team(team_id));
-create policy "admins delete locations" on public.team_locations for delete using (public.can_manage_team(team_id));
+create policy "members insert locations" on public.team_locations for insert with check (public.is_team_member(team_id));
+create policy "members update locations" on public.team_locations for update using (public.is_team_member(team_id));
+create policy "members delete locations" on public.team_locations for delete using (public.is_team_member(team_id));
 create policy "members read draws" on public.team_draws for select using (public.is_team_member(team_id));
 
 create or replace function public.create_team(p_name text, p_locations jsonb default '[]'::jsonb)
@@ -169,7 +169,6 @@ declare
   business_day date := (now() at time zone 'Asia/Shanghai')::date;
 begin
   if not public.is_team_member(p_team_id) then raise exception 'team membership required'; end if;
-  if p_force and not public.can_manage_team(p_team_id) then raise exception 'manager permission required'; end if;
   perform pg_advisory_xact_lock(hashtextextended(p_team_id::text || business_day::text, 0));
   select * into current_draw from team_draws where team_id = p_team_id and business_date = business_day;
 

@@ -29,11 +29,11 @@
           <Plus :size="16" />
           <span>添加新午餐地点</span>
         </button>
-        <button v-if="settings.activeMode === 'personal' || (settings.activeMode === 'team' && canManageTeam)" class="btn-secondary" @click="showBatchModal = true" title="批量多行文本导入地点">
+        <button class="btn-secondary" @click="showBatchModal = true" title="批量多行文本导入地点">
           <FileText :size="14" />
           <span>批量文本导入</span>
         </button>
-        <button v-if="selectedLocIds.length > 0 && (settings.activeMode === 'personal' || canManageTeam)" class="btn-danger" @click="handleBatchDelete">
+        <button v-if="selectedLocIds.length > 0" class="btn-danger" @click="handleBatchDelete">
           <Trash2 :size="14" />
           <span>批量删除 ({{ selectedLocIds.length }})</span>
         </button>
@@ -44,7 +44,7 @@
       </div>
 
       <!-- 批量选择控制工具条 -->
-      <div v-if="locations.length > 0 && (settings.activeMode === 'personal' || canManageTeam)" class="select-all-bar">
+      <div v-if="locations.length > 0" class="select-all-bar">
         <label class="checkbox-label select-all-label">
           <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" />
           <span>全选所有地点 ({{ selectedLocIds.length }}/{{ locations.length }})</span>
@@ -53,7 +53,7 @@
 
       <div class="locations-list">
         <div v-for="loc in locations" :key="loc.id" class="loc-card" :class="{ 'is-drawn': loc.isDrawn, 'is-selected': selectedLocIds.includes(loc.id) }">
-          <div v-if="settings.activeMode === 'personal' || canManageTeam" class="card-checkbox-wrapper">
+          <div class="card-checkbox-wrapper">
             <input type="checkbox" :value="loc.id" v-model="selectedLocIds" class="loc-checkbox" />
           </div>
           <div class="loc-emoji">{{ loc.emoji }}</div>
@@ -83,7 +83,7 @@
       </div>
 
 
-      <div v-if="settings.activeMode === 'personal' || (settings.activeMode === 'team' && canManageTeam)" class="danger-zone">
+      <div class="danger-zone">
         <button class="restore-link" @click="handleRestoreDefault">
           ↺ 恢复/填充系统预设 16+ 经典美食地点池
         </button>
@@ -300,7 +300,6 @@ const { isSyncing, pushToCloud, pullFromCloud } = useCloudSync();
 const {
   team,
   locations: teamLocations,
-  canManage: canManageTeam,
   addLocation: addTeamLocation,
   batchAddLocations: batchAddTeamLocations,
   updateLocation: updateTeamLocation,
@@ -327,7 +326,6 @@ async function handleBatchDelete() {
   if (settings.value.soundEnabled) soundEffects.playTick(300);
 
   if (settings.value.activeMode === 'team') {
-    if (!canManageTeam.value) return alert('只有团队所有者或管理员可以删除团队地点。');
     try {
       await batchDeleteTeamLocations(selectedLocIds.value);
       alert(`已成功删除选中的 ${selectedLocIds.value.length} 个团队地点！`);
@@ -375,7 +373,6 @@ async function handleConfirmBatchImport() {
   if (settings.value.soundEnabled) soundEffects.playTick(900);
 
   if (settings.value.activeMode === 'team') {
-    if (!canManageTeam.value) return alert('只有团队所有者或管理员可以导入地点。');
     try {
       await batchAddTeamLocations(parsedPreview.value, isOverwrite);
       alert(`成功批量${isOverwrite ? '覆盖' : '追加'}导入 ${parsedPreview.value.length} 个团队地点！`);
@@ -429,7 +426,6 @@ async function handleRestoreDefault() {
   if (confirm('警告：这将会把地点池重置为初始预设的 16+ 美食地点，自定义的地点将被覆盖。是否继续？')) {
     if (settings.value.soundEnabled) soundEffects.playTick(600);
     if (settings.value.activeMode === 'team') {
-      if (!canManageTeam.value) return alert('只有团队所有者或管理员可以重置团队地点。');
       try {
         const DEFAULT_LOCS = [
           { name: '隆江猪脚饭', emoji: '🍱', tags: ['快餐', '肉食', '高能量'], priceRange: '￥18-28', recommendedDish: '双拼猪脚饭加卤蛋', weight: 1 },
@@ -497,7 +493,6 @@ async function saveLoc() {
 
   if (isEditLoc.value) {
     if (settings.value.activeMode === 'team') {
-      if (!canManageTeam.value) return alert('只有团队所有者或管理员可以编辑菜单。');
       await updateTeamLocation({ ...locForm.value, tags: parsedTags });
     } else {
       updateLocation({ ...locForm.value, tags: parsedTags });
@@ -512,7 +507,6 @@ async function saveLoc() {
       weight: 1,
     };
     if (settings.value.activeMode === 'team') {
-      if (!canManageTeam.value) return alert('只有团队所有者或管理员可以编辑菜单。');
       await addTeamLocation(value);
     } else {
       addLocation(value);
@@ -525,7 +519,6 @@ async function handleDeleteLoc(id: string) {
   if (confirm('确定删除此午餐地点？')) {
     if (settings.value.soundEnabled) soundEffects.playTick(300);
     if (settings.value.activeMode === 'team') {
-      if (!canManageTeam.value) return alert('只有团队所有者或管理员可以编辑菜单。');
       await deleteTeamLocation(id);
     } else {
       deleteLocation(id);

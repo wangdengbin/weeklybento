@@ -45,6 +45,7 @@ export interface TeamRollResult {
 export interface AppSettings {
   adminPassword: string;
   antiRepeatMode: 'round' | 'none'; // 'round': 抽完为止自动/手动重置
+  weeklyNoRepeat?: boolean; // 是否开启按周不重复 Roll 模式
   soundEnabled: boolean;
   activeMode: 'personal' | 'team'; // 当前激活模式
   personalSyncConfig?: CloudSyncConfig; // 个人云端同步设置

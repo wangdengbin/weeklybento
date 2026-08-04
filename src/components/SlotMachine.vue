@@ -31,7 +31,7 @@
           <Check :size="18" />
           <span>记录为我的今日日志</span>
         </button>
-        <button v-if="canManageTeam" class="btn-secondary" @click="handleRerollTeamResult">
+        <button class="btn-secondary" @click="handleRerollTeamResult">
           <RotateCcw :size="18" />
           <span>重新选定 (重抽并同步团队)</span>
         </button>
@@ -47,6 +47,11 @@
             <template v-if="settings.activeMode === 'team'">[👥 团队待抽池] </template>
             待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
           </span>
+
+          <label class="weekly-toggle-badge" title="开启后本周 (周一至周日) 已抽中过的餐厅不会再次重抽">
+            <input type="checkbox" v-model="settings.weeklyNoRepeat" class="weekly-checkbox" />
+            <span>📅 按周不重复</span>
+          </label>
         </div>
         <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
           <RotateCcw :size="13" />
@@ -163,7 +168,6 @@ const {
 const {
   locations: teamLocations,
   todayResult: teamTodayResult,
-  canManage: canManageTeam,
   roll: rollTeam,
 } = useTeamWorkspace();
 
@@ -387,6 +391,29 @@ function handleResetPool() {
 
 .status-dot.is-empty {
   background: #EF4444;
+}
+
+.weekly-toggle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0F172A;
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.weekly-checkbox {
+  width: 13px;
+  height: 13px;
+  accent-color: #FF6B00;
+  cursor: pointer;
 }
 
 .reset-link {
