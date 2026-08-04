@@ -73,33 +73,30 @@ async function signUpOrUpgrade(email: string, password: string): Promise<{ succe
   try {
     const cleanEmail = email.trim();
 
-    // 如果当前已经是匿名用户，使用 updateUser 关联 email 与 password 升级为正式账号
-    if (isAnonymous.value && user.value) {
-      const { data, error } = await supabase.auth.updateUser({
-        email: cleanEmail,
-        password: password,
-      });
+    // Supabase 官方标准：在匿名 Session 下调用 signUp 会自动把当前匿名 user_id 升级绑定为该邮箱密码
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: password,
+    });
 
-      if (error) {
-        // 如果更新关联失败（可能邮箱已存在），回退到普通 signUp
-        const { error: signUpErr } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: password,
-        });
-        if (signUpErr) throw signUpErr;
-      } else {
-        session.value = data.user ? (await supabase.auth.getSession()).data.session : session.value;
-        user.value = data.user || user.value;
+    if (error) {
+      if (error.message.includes('already registered') || error.message.includes('already exists')) {
+        throw new Error('该邮箱已注册！请在上方切换到【登录已有账号】标签进行登录。');
       }
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email: cleanEmail,
-        password: password,
-      });
-      if (error) throw error;
+      throw error;
     }
 
-    return { success: true, message: '账号绑定注册成功！您现在可以在手机和电脑登录同一账号。' };
+    if (data.session) {
+      session.value = data.session;
+      user.value = data.user;
+      return { success: true, message: '账号绑定注册成功！现在可以在手机和电脑随时登录同一账号。' };
+    } else {
+      // 开启了邮箱验证 (Email Confirmation)
+      return { 
+        success: true, 
+        message: '注册已提交！请前往 Supabase 后台 (Authentication -> Email) 关闭【Confirm email】开关，或前往邮箱点击激活链接后再登录。' 
+      };
+    }
   } catch (e: any) {
     const msg = e.message || '注册绑定失败';
     authError.value = msg;
@@ -122,7 +119,17 @@ async function signInWithPassword(email: string, password: string): Promise<{ su
       email: email.trim(),
       password: password,
     });
-    if (error) throw error;
+
+    if (error) {
+      if (error.message.includes('Invalid login credentials')) {
+        throw new Error(
+          '登录凭据无效 (Invalid login credentials)。原因可能为：\n' +
+          '1. 邮箱或密码拼写不正确；\n' +
+          '2. Supabase 开启了【Confirm email】导致未激活账号无法登录（请在 Supabase 后台 Authentication -> Email 中关闭 Enable Email Confirmations）。'
+        );
+      }
+      throw error;
+    }
 
     session.value = data.session;
     user.value = data.user;

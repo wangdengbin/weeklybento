@@ -321,6 +321,8 @@ function handleClose() {
   border: 1px solid #FCA5A5;
   padding: 8px 10px;
   border-radius: 6px;
+  white-space: pre-wrap;
+  line-height: 1.4;
 }
 
 .success-log-box {
@@ -330,6 +332,8 @@ function handleClose() {
   border: 1px solid #86EFAC;
   padding: 8px 10px;
   border-radius: 6px;
+  white-space: pre-wrap;
+  line-height: 1.4;
 }
 
 .logged-in-panel {
