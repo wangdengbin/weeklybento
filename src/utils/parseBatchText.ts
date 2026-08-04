@@ -77,6 +77,7 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
     let tags: string[] = [];
     let priceRange = '￥20-35';
     let recommendedDish = '';
+    let address = '';
 
     const bracketMatch = trimmed.match(/^([^(（]+)[(（]([^)）]+)[)）]$/);
     if (bracketMatch) {
@@ -93,6 +94,8 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
           priceRange = item.replace(/^(价格[：:]|人均[：:]?)/i, '').trim();
         } else if (/^(推荐[：:]|招牌[：:]?)/i.test(item)) {
           recommendedDish = item.replace(/^(推荐[：:]|招牌[：:]?)/i, '').trim();
+        } else if (/^(地址[：:]|位置[：:]|address[：:]?)/i.test(item)) {
+          address = item.replace(/^(地址[：:]|位置[：:]|address[：:]?)/i, '').trim();
         } else if (!tags.length) {
           tags = item.split(/[,，、\s]+/).filter(Boolean);
         }
@@ -105,6 +108,9 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
       }
       if (parts[2]) {
         priceRange = parts[2].trim();
+      }
+      if (parts[3]) {
+        address = parts[3].trim();
       }
     } else {
       name = trimmed;
@@ -119,6 +125,7 @@ export function parseBatchLocationsText(rawText: string): ParsedLocationItem[] {
         tags: formattedTags,
         priceRange,
         recommendedDish,
+        address: address || undefined,
         weight: 1,
         mealCategories: autoPickMealCategories(name, formattedTags),
       });
