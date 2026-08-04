@@ -92,6 +92,16 @@ begin
   if auth.uid() is null then raise exception 'authentication required'; end if;
   if char_length(trim(p_name)) not between 1 and 40 then raise exception 'invalid team name'; end if;
 
+  -- 匿名用户无法使用团队功能
+  if (select coalesce((raw_app_meta_data->>'provider') = 'anonymous' or (is_anonymous is true), false) from auth.users where id = auth.uid()) then
+    raise exception '匿名账户无法使用团队功能，请先登录或绑定正式邮箱账号 (anonymous users cannot use team features)';
+  end if;
+
+  -- 增加单账户最多 3 个团队配额校验
+  if (select count(*) from team_members where user_id = auth.uid()) >= 3 then
+    raise exception '已达到单账户最多 3 个团队的上限 (team count limit reached max 3)';
+  end if;
+
   insert into teams (name, invite_token_hash, created_by)
   values (trim(p_name), encode(digest(invite_token, 'sha256'), 'hex'), auth.uid())
   returning * into new_team;
@@ -120,10 +130,19 @@ declare
   member_role text;
 begin
   if auth.uid() is null then raise exception 'authentication required'; end if;
+
+  -- 匿名用户无法使用团队功能
+  if (select coalesce((raw_app_meta_data->>'provider') = 'anonymous' or (is_anonymous is true), false) from auth.users where id = auth.uid()) then
+    raise exception '匿名账户无法使用团队功能，请先登录或绑定正式邮箱账号 (anonymous users cannot use team features)';
+  end if;
+
   select * into target from teams where public_id = lower(trim(p_public_id));
   if target.id is null then raise exception 'team not found'; end if;
   select role into member_role from team_members where team_id = target.id and user_id = auth.uid();
   if member_role is null then
+    if (select count(*) from team_members where user_id = auth.uid()) >= 3 then
+      raise exception '已达到单账户最多 3 个团队的上限 (team count limit reached max 3)';
+    end if;
     if target.invite_token_hash <> encode(digest(coalesce(p_invite_token, ''), 'sha256'), 'hex') then
       raise exception 'invalid invitation';
     end if;
@@ -132,6 +151,56 @@ begin
   end if;
   return jsonb_build_object('id', target.id, 'public_id', target.public_id,
     'name', target.name, 'role', member_role);
+end;
+$$;
+
+create or replace function public.get_team_members(p_team_id uuid)
+returns jsonb language plpgsql security definer set search_path = public, auth
+as $$
+begin
+  if not public.is_team_member(p_team_id) then
+    raise exception 'team membership required';
+  end if;
+
+  return (
+    select coalesce(jsonb_agg(
+      jsonb_build_object(
+        'user_id', m.user_id,
+        'role', m.role,
+        'joined_at', to_char(m.joined_at at time zone 'Asia/Shanghai', 'YYYY-MM-DD HH24:MI'),
+        'email', case 
+          when u.email is null or u.email = '' then '匿名成员'
+          else u.email
+        end,
+        'is_me', (m.user_id = auth.uid())
+      ) order by m.joined_at asc
+    ), '[]'::jsonb)
+    from public.team_members m
+    left join auth.users u on u.id = m.user_id
+    where m.team_id = p_team_id
+  );
+end;
+$$;
+
+create or replace function public.get_my_teams()
+returns jsonb language plpgsql security definer set search_path = public
+as $$
+begin
+  if auth.uid() is null then return '[]'::jsonb; end if;
+  return (
+    select coalesce(jsonb_agg(
+      jsonb_build_object(
+        'id', t.id,
+        'public_id', t.public_id,
+        'name', t.name,
+        'role', m.role,
+        'joined_at', m.joined_at
+      ) order by m.joined_at asc
+    ), '[]'::jsonb)
+    from teams t
+    join team_members m on m.team_id = t.id
+    where m.user_id = auth.uid()
+  );
 end;
 $$;
 
@@ -209,12 +278,16 @@ $$;
 grant execute on function public.create_team(text, jsonb) to authenticated;
 grant execute on function public.join_team(text, text) to authenticated;
 grant execute on function public.open_team(text) to authenticated;
+grant execute on function public.get_my_teams() to authenticated;
+grant execute on function public.get_team_members(uuid) to authenticated;
 grant execute on function public.rotate_team_invite(uuid) to authenticated;
 grant execute on function public.roll_team(uuid, boolean) to authenticated;
 
 revoke execute on function public.create_team(text, jsonb) from public, anon;
 revoke execute on function public.join_team(text, text) from public, anon;
 revoke execute on function public.open_team(text) from public, anon;
+revoke execute on function public.get_my_teams() from public, anon;
+revoke execute on function public.get_team_members(uuid) from public, anon;
 revoke execute on function public.rotate_team_invite(uuid) from public, anon;
 revoke execute on function public.roll_team(uuid, boolean) from public, anon;
 

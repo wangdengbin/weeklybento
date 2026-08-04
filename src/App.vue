@@ -36,6 +36,7 @@
     <TeamWorkspaceModal
       :visible="showTeamModal"
       @close="showTeamModal = false"
+      @open-auth-modal="showAuthModal = true"
     />
 
     <AuthModal

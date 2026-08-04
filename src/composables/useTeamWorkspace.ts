@@ -12,7 +12,17 @@ interface TeamWorkspace {
   role: TeamRole;
 }
 
+export interface TeamMember {
+  user_id: string;
+  role: TeamRole;
+  joined_at: string;
+  email: string;
+  is_me: boolean;
+}
+
 const team = ref<TeamWorkspace | null>(null);
+const myTeams = ref<TeamWorkspace[]>([]);
+const members = ref<TeamMember[]>([]);
 const locations = ref<BentoLocation[]>([]);
 const todayResult = ref<TeamRollResult | null>(null);
 const teamHistory = ref<DailyRecord[]>([]);
@@ -51,6 +61,94 @@ async function ensureAnonymousSession() {
   if (error) throw error;
 }
 
+async function checkNotAnonymous() {
+  if (!supabase) throw new Error('尚未配置 Supabase');
+  const { data } = await supabase.auth.getSession();
+  const u = data.session?.user;
+  if (!u || u.is_anonymous || u.app_metadata?.provider === 'anonymous') {
+    throw new Error('匿名账户无法使用搭子圈功能，请先点击右上角【登录/注册】绑定正式账号！');
+  }
+}
+
+async function fetchTeamMembers(targetTeamId?: string): Promise<TeamMember[]> {
+  const teamId = targetTeamId || team.value?.id;
+  if (!supabase || !teamId) {
+    members.value = [];
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('get_team_members', { p_team_id: teamId });
+    if (!error && Array.isArray(data)) {
+      members.value = data as TeamMember[];
+      return members.value;
+    }
+  } catch (e) {
+    console.warn('fetchTeamMembers rpc failed, trying fallback select:', e);
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData.session?.user?.id;
+
+    const { data, error } = await supabase
+      .from('team_members')
+      .select('user_id, role, joined_at')
+      .eq('team_id', teamId)
+      .order('joined_at', { ascending: true });
+
+    if (error) throw error;
+    members.value = (data || []).map((row: any) => ({
+      user_id: row.user_id,
+      role: row.role,
+      joined_at: new Date(row.joined_at).toLocaleDateString('zh-CN'),
+      email: row.user_id === currentUserId ? '我' : `搭子成员 (${row.user_id.slice(0, 6)})`,
+      is_me: row.user_id === currentUserId,
+    }));
+    return members.value;
+  } catch (e) {
+    console.error('Fallback fetchTeamMembers error:', e);
+    return [];
+  }
+}
+
+async function fetchMyTeams(): Promise<TeamWorkspace[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase.rpc('get_my_teams');
+    if (!error && Array.isArray(data)) {
+      myTeams.value = data as TeamWorkspace[];
+      return myTeams.value;
+    }
+  } catch (e) {
+    console.warn('fetchMyTeams rpc failed, trying fallback select:', e);
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('team_members')
+      .select('role, joined_at, teams!inner(id, public_id, name)')
+      .eq('user_id', userId)
+      .order('joined_at', { ascending: true });
+
+    if (error) throw error;
+    myTeams.value = (data || []).map((row: any) => ({
+      id: row.teams.id,
+      public_id: row.teams.public_id,
+      name: row.teams.name,
+      role: row.role,
+    }));
+    return myTeams.value;
+  } catch (e) {
+    console.error('Fallback fetchMyTeams error:', e);
+    return [];
+  }
+}
+
 async function loadWorkspace() {
   if (!supabase || !team.value) return;
   const { data: sessionData } = await supabase.auth.getSession();
@@ -78,7 +176,7 @@ async function loadWorkspace() {
       tags: loc?.tags || [],
       priceRange: loc?.priceRange || '',
       recommendedDish: loc?.recommendedDish || '',
-      note: draw.note || (isMe ? '团队协同 Roll (由我选定)' : '团队协同 Roll (团队成员选定)'),
+      note: draw.note || (isMe ? '午餐搭子 Roll (由我选定)' : '午餐搭子 Roll (搭子成员选定)'),
       drawnAt: new Date(draw.drawn_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     };
   });
@@ -103,6 +201,8 @@ async function loadWorkspace() {
   } else {
     todayResult.value = null;
   }
+
+  await fetchTeamMembers();
 }
 
 function startRealtime() {
@@ -112,6 +212,7 @@ function startRealtime() {
   channel = supabase.channel(`weekly-bento-${teamId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_locations', filter: `team_id=eq.${teamId}` }, () => loadWorkspace())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'team_draws', filter: `team_id=eq.${teamId}` }, () => loadWorkspace())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members', filter: `team_id=eq.${teamId}` }, () => loadWorkspace())
     .subscribe();
 }
 
@@ -126,6 +227,9 @@ function setTeamUrl(publicId: string) {
 async function openTeam(publicId: string, inviteToken?: string) {
   if (!supabase) throw new Error('尚未配置 Supabase');
   await ensureAnonymousSession();
+  if (inviteToken) {
+    await checkNotAnonymous();
+  }
   const rpcName = inviteToken ? 'join_team' : 'open_team';
   const params = inviteToken
     ? { p_public_id: publicId, p_invite_token: inviteToken }
@@ -138,16 +242,39 @@ async function openTeam(publicId: string, inviteToken?: string) {
   startRealtime();
 }
 
+async function switchActiveTeam(publicId: string) {
+  if (!publicId) return;
+  isLoading.value = true;
+  errorMessage.value = '';
+  try {
+    await openTeam(publicId);
+    await fetchMyTeams();
+  } catch (error) {
+    errorMessage.value = getErrorMessage(error);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 async function initialize() {
   if (!isSupabaseConfigured) return;
   isLoading.value = true;
   errorMessage.value = '';
   try {
     await ensureAnonymousSession();
+    await fetchMyTeams();
+
     const url = new URL(window.location.href);
     const publicId = url.searchParams.get('team') || localStorage.getItem('weekly_bento_active_team');
     const invite = url.searchParams.get('invite') || undefined;
-    if (publicId) await openTeam(publicId, invite);
+    if (invite && publicId) {
+      await openTeam(publicId, invite);
+      await fetchMyTeams();
+    } else if (publicId) {
+      await openTeam(publicId);
+    } else if (myTeams.value.length > 0) {
+      await openTeam(myTeams.value[0].public_id);
+    }
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
   } finally {
@@ -157,6 +284,7 @@ async function initialize() {
 
 async function createTeam(name: string, seedLocations: BentoLocation[]) {
   if (!supabase) throw new Error('尚未配置 Supabase');
+  await checkNotAnonymous();
   isLoading.value = true;
   errorMessage.value = '';
   try {
@@ -170,6 +298,7 @@ async function createTeam(name: string, seedLocations: BentoLocation[]) {
     team.value = created;
     setTeamUrl(created.public_id);
     pendingInviteUrl.value = buildInviteUrl(created.public_id, created.invite_token);
+    await fetchMyTeams();
     await loadWorkspace();
     startRealtime();
     return created;
@@ -278,12 +407,14 @@ function clearActiveTeamState() {
   window.history.replaceState({}, '', url);
 }
 
-async function leaveTeam() {
-  if (!supabase || !team.value) return;
+async function leaveTeam(targetTeamId?: string) {
+  if (!supabase) return;
+  const teamId = targetTeamId || team.value?.id;
+  if (!teamId) return;
+
   isLoading.value = true;
   errorMessage.value = '';
   try {
-    const teamId = team.value.id;
     const { data: sessionData } = await supabase.auth.getSession();
     const userId = sessionData.session?.user?.id;
     if (!userId) throw new Error('身份校验失败');
@@ -291,7 +422,13 @@ async function leaveTeam() {
     const { error } = await supabase.from('team_members').delete().eq('team_id', teamId).eq('user_id', userId);
     if (error) throw error;
 
-    clearActiveTeamState();
+    if (team.value?.id === teamId) {
+      clearActiveTeamState();
+    }
+    await fetchMyTeams();
+    if (!team.value && myTeams.value.length > 0) {
+      await switchActiveTeam(myTeams.value[0].public_id);
+    }
   } catch (e: any) {
     errorMessage.value = getErrorMessage(e);
     throw e;
@@ -300,16 +437,24 @@ async function leaveTeam() {
   }
 }
 
-async function deleteTeam() {
-  if (!supabase || !team.value) return;
+async function deleteTeam(targetTeamId?: string) {
+  if (!supabase) return;
+  const teamId = targetTeamId || team.value?.id;
+  if (!teamId) return;
+
   isLoading.value = true;
   errorMessage.value = '';
   try {
-    const teamId = team.value.id;
     const { error } = await supabase.from('teams').delete().eq('id', teamId);
     if (error) throw error;
 
-    clearActiveTeamState();
+    if (team.value?.id === teamId) {
+      clearActiveTeamState();
+    }
+    await fetchMyTeams();
+    if (!team.value && myTeams.value.length > 0) {
+      await switchActiveTeam(myTeams.value[0].public_id);
+    }
   } catch (e: any) {
     errorMessage.value = getErrorMessage(e);
     throw e;
@@ -361,6 +506,8 @@ export function useTeamWorkspace() {
   return {
     isConfigured: isSupabaseConfigured,
     team,
+    myTeams,
+    members,
     locations,
     todayResult,
     history: teamHistory,
@@ -370,6 +517,9 @@ export function useTeamWorkspace() {
     canManage,
     isOwner,
     initialize,
+    fetchMyTeams,
+    fetchTeamMembers,
+    switchActiveTeam,
     openTeam,
     createTeam,
     createInviteUrl,

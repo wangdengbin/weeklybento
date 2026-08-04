@@ -3,9 +3,9 @@
     <div class="history-header">
       <div class="header-title">
         <Calendar :size="20" class="text-orange" />
-        <span>{{ isTeamMode ? `${team?.name || '团队'} 每日抽签记录` : '每日午餐记录' }}</span>
+        <span>{{ isTeamMode ? `${team?.name || '搭子圈'} 每日抽签记录` : '每日午餐记录' }}</span>
         <span class="mode-badge" :class="isTeamMode ? 'team-badge' : 'personal-badge'">
-          {{ isTeamMode ? '👥 团队全员同步' : '🏠 个人记录' }}
+          {{ isTeamMode ? '👥 搭子圈全员同步' : '🏠 个人记录' }}
         </span>
       </div>
 
@@ -19,7 +19,7 @@
     <!-- 列表展示 -->
     <div v-if="records.length === 0" class="empty-state glass-card">
       <UtensilsCrossed :size="48" class="empty-icon" />
-      <p class="empty-text">{{ isTeamMode ? '团队暂无选餐记录，大家快去 Roll 一个吧！' : '尚无午餐记录，快去 Roll 一个吧！' }}</p>
+      <p class="empty-text">{{ isTeamMode ? '搭子圈暂无选餐记录，大家快去 Roll 一个吧！' : '尚无午餐记录，快去 Roll 一个吧！' }}</p>
     </div>
 
     <div v-else class="records-list">
@@ -59,7 +59,7 @@
     <!-- 编辑/补录弹窗 Modal -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal-content">
-        <h3 class="modal-title">{{ isEditing ? '修改午餐记录' : (isTeamMode ? '团队补录午餐记录' : '新增午餐记录 (管理员)') }}</h3>
+        <h3 class="modal-title">{{ isEditing ? '修改午餐记录' : (isTeamMode ? '搭子圈补录午餐记录' : '新增午餐记录 (管理员)') }}</h3>
         
         <form @submit.prevent="saveRecord" class="edit-form">
           <div class="form-item">

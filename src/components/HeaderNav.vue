@@ -16,13 +16,24 @@
 
       <div class="actions-area">
         <!-- 桌面端内嵌 模式切换胶囊 -->
-        <div 
-          class="mode-toggle-pill desktop-mode-pill" 
-          @click="toggleMode" 
-          :title="settings.activeMode === 'personal' ? '切换至团队共享模式' : '切换至个人独享模式'"
-        >
-          <span class="mode-item" :class="{ active: settings.activeMode === 'personal' }">🏠 个人</span>
-          <span class="mode-item" :class="{ active: settings.activeMode === 'team' }">👥 团队</span>
+        <div class="mode-toggle-pill desktop-mode-pill">
+          <span
+            class="mode-item"
+            :class="{ active: settings.activeMode === 'personal' }"
+            @click="selectPersonalMode"
+            title="切换至个人独享模式"
+          >
+            🏠 个人
+          </span>
+          <span
+            class="mode-item team-mode-item"
+            :class="{ active: settings.activeMode === 'team' }"
+            @click="selectTeamMode"
+            :title="settings.activeMode === 'team' ? '点击切换团队或管理邀请' : '切换至午餐搭子模式'"
+          >
+            👥 {{ displayTeamName }}
+            <ChevronDown v-if="settings.activeMode === 'team'" :size="13" class="team-arrow-icon" />
+          </span>
         </div>
 
         <!-- 账号登录/身份 状态按钮 -->
@@ -42,14 +53,15 @@
           <VolumeX v-else :size="20" class="text-gray" />
         </button>
 
+        <!-- 搭子圈切换/管理按钮 -->
         <button
-          v-if="settings.activeMode === 'team' && team"
-          class="icon-btn"
+          v-if="settings.activeMode === 'team'"
+          class="icon-btn team-manage-btn"
           type="button"
-          title="团队与邀请"
+          :title="team ? `当前搭子圈：${team.name} (点击切换/管理)` : '午餐搭子圈与邀请'"
           @click="emit('open-team-modal')"
         >
-          <Share2 :size="18" />
+          <Users :size="18" class="text-orange" />
         </button>
 
         <!-- 管理员暗门 / 状态 -->
@@ -67,21 +79,30 @@
 
     <!-- 移动端独立第二行：宽体居中模式切换 segmented pill -->
     <div class="mobile-mode-row">
-      <div 
-        class="mode-toggle-pill mobile-mode-pill" 
-        @click="toggleMode" 
-        :title="settings.activeMode === 'personal' ? '切换至团队共享模式' : '切换至个人独享模式'"
-      >
-        <span class="mode-item" :class="{ active: settings.activeMode === 'personal' }">🏠 个人独享</span>
-        <span class="mode-item" :class="{ active: settings.activeMode === 'team' }">👥 团队协同</span>
+      <div class="mode-toggle-pill mobile-mode-pill">
+        <span
+          class="mode-item"
+          :class="{ active: settings.activeMode === 'personal' }"
+          @click="selectPersonalMode"
+        >
+          🏠 个人独享
+        </span>
+        <span
+          class="mode-item team-mode-item"
+          :class="{ active: settings.activeMode === 'team' }"
+          @click="selectTeamMode"
+        >
+          👥 {{ displayTeamName }}
+          <ChevronDown v-if="settings.activeMode === 'team'" :size="13" class="team-arrow-icon" />
+        </span>
       </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Volume2, VolumeX, ShieldCheck, Lock, Share2, User, UserCheck } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
+import { Volume2, VolumeX, ShieldCheck, Lock, Users, User, UserCheck, ChevronDown } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useAdmin } from '../composables/useAdmin';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
@@ -92,19 +113,35 @@ const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-moda
 
 const { settings, switchMode } = useBentoStore();
 const { isAdminLoggedIn } = useAdmin();
-const { team } = useTeamWorkspace();
+const { team, myTeams } = useTeamWorkspace();
 const { isAnonymous, userEmail } = useAuth();
 
 const clickCount = ref(0);
 let clickTimer: number | null = null;
 
-function toggleMode() {
-  const nextMode = settings.value.activeMode === 'personal' ? 'team' : 'personal';
-  if (nextMode === 'team' && !team.value) {
+const displayTeamName = computed(() => {
+  if (team.value?.name) {
+    return team.value.name.length > 7 ? team.value.name.slice(0, 6) + '...' : team.value.name;
+  }
+  return '午餐搭子';
+});
+
+function selectPersonalMode() {
+  switchMode('personal');
+  if (settings.value.soundEnabled) soundEffects.playTick(800);
+}
+
+function selectTeamMode() {
+  if (settings.value.activeMode === 'team') {
+    emit('open-team-modal');
+    if (settings.value.soundEnabled) soundEffects.playTick(600);
+    return;
+  }
+  if (!team.value && myTeams.value.length === 0) {
     emit('open-team-modal');
     return;
   }
-  switchMode(nextMode);
+  switchMode('team');
   if (settings.value.soundEnabled) soundEffects.playTick(800);
 }
 
@@ -292,7 +329,14 @@ function openAdminModal() {
   padding: 5px 9px;
   border-radius: 16px;
   color: #64748B;
+  gap: 3px;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.team-arrow-icon {
+  margin-left: 1px;
+  color: #EA580C;
+  opacity: 0.8;
 }
 
 .mode-item.active {

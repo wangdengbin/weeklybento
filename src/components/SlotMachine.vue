@@ -3,7 +3,7 @@
     <!-- 团队模式：今日已有团队选定结果卡片 -->
     <div v-if="hasTodayTeamResult && !forceShowMachine" class="team-result-card glass-card">
       <div class="team-card-header">
-        <span class="team-badge">👥 团队协同模式</span>
+        <span class="team-badge">👥 午餐搭子模式</span>
         <span class="team-status-tag">今日已选定</span>
       </div>
 
@@ -22,7 +22,7 @@
         </div>
 
         <div class="team-meta-info">
-          ⏰ 抽取时间：{{ todayTeamResult?.rolledAt }} · {{ todayTeamResult?.rolledBy || '团队成员' }} 已锁定今日菜单
+          ⏰ 抽取时间：{{ todayTeamResult?.rolledAt }} · {{ todayTeamResult?.rolledBy || '搭子成员' }} 已锁定今日菜单
         </div>
       </div>
 
@@ -33,7 +33,7 @@
         </button>
         <button class="btn-secondary" @click="handleRerollTeamResult">
           <RotateCcw :size="18" />
-          <span>重新选定 (重抽并同步团队)</span>
+          <span>重新选定 (重抽并同步搭子圈)</span>
         </button>
       </div>
     </div>
@@ -44,7 +44,7 @@
         <div class="status-info">
           <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
           <span class="status-text">
-            <template v-if="settings.activeMode === 'team'">[👥 团队待抽池] </template>
+            <template v-if="settings.activeMode === 'team'">[👥 搭子待抽池] </template>
             待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
           </span>
 
@@ -63,7 +63,7 @@
       <div class="machine-frame glass-card">
         <div class="machine-header">
           <Sparkles class="sparkle-icon" :size="18" />
-          <span>{{ settings.activeMode === 'team' ? 'TEAM RANDOM ROLL' : 'BENTO RANDOM ROLL' }}</span>
+          <span>{{ settings.activeMode === 'team' ? 'BUDDY RANDOM ROLL' : 'BENTO RANDOM ROLL' }}</span>
           <Sparkles class="sparkle-icon" :size="18" />
         </div>
 
@@ -131,13 +131,13 @@
               <Dice5 v-if="!isRolling" :size="24" class="btn-icon" />
               <RefreshCw v-else :size="24" class="btn-icon spin-icon" />
               <span class="btn-text">
-                {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮团队选午餐！(ROLL)' : '帮我选午餐！(ROLL)')) }}
+                {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮搭子选午餐！(ROLL)' : '帮我选午餐！(ROLL)')) }}
               </span>
             </div>
           </button>
 
           <p class="anti-repeat-tip">
-            ✨ {{ settings.activeMode === 'team' ? '团队模式协同：任何人完成 Roll 后全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
+            ✨ {{ settings.activeMode === 'team' ? '午餐搭子协同：任何人完成 Roll 后搭子圈全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
           </p>
         </div>
       </div>
