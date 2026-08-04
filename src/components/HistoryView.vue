@@ -3,36 +3,92 @@
     <div class="history-header">
       <div class="header-title">
         <Calendar :size="20" class="text-orange" />
-        <span>{{ isTeamMode ? `${team?.name || '搭子圈'} 每日抽签记录` : '每日午餐记录' }}</span>
+        <span>{{ isTeamMode ? `${team?.name || '搭子圈'} 每日抽签记录` : '饮食与记账日志' }}</span>
         <span class="mode-badge" :class="isTeamMode ? 'team-badge' : 'personal-badge'">
-          {{ isTeamMode ? '👥 搭子圈全员同步' : '🏠 个人记录' }}
+          {{ isTeamMode ? '👥 搭子圈全员同步' : '🏠 个人消费与打卡' }}
         </span>
       </div>
 
       <!-- 补录历史记录按钮 -->
       <button v-if="canAddRecord" class="btn-secondary add-rec-btn" @click="openAddModal">
         <Plus :size="16" />
-        <span>补录记录</span>
+        <span>📝 补录打卡/记一笔</span>
       </button>
+    </div>
+
+    <!-- 🏠 个人模式：消费统计看板 (Expense Dashboard) -->
+    <div v-if="!isTeamMode" class="expense-dashboard glass-card">
+      <div class="dash-row main-stats">
+        <div class="stat-card total-card">
+          <span class="stat-label">💰 本月伙食总支出</span>
+          <span class="stat-val">￥{{ stats.monthlyTotal.toFixed(2) }}</span>
+        </div>
+        <div class="stat-card tea-card">
+          <span class="stat-label">🧋 奶茶专账</span>
+          <span class="stat-val">{{ stats.teaCount }} 杯 · ￥{{ stats.teaTotal.toFixed(2) }}</span>
+        </div>
+        <div class="stat-card avg-card">
+          <span class="stat-label">📊 日均开销 (近30天)</span>
+          <span class="stat-val">￥{{ stats.dailyAvg.toFixed(2) }}</span>
+        </div>
+      </div>
+
+      <!-- 五餐占比对比进度条 -->
+      <div class="dash-row ratio-bar-row">
+        <div class="ratio-title">五餐开销占比 (按金额)：</div>
+        <div class="ratio-progress-bar">
+          <div 
+            v-for="cat in MEAL_CATEGORIES" 
+            :key="cat.key" 
+            class="progress-seg" 
+            :style="{ width: `${stats.catRatioMap[cat.key] || 0}%`, background: getCatColor(cat.key) }"
+            :title="`${cat.name}: ￥${(stats.catTotalMap[cat.key] || 0).toFixed(2)} (${(stats.catRatioMap[cat.key] || 0).toFixed(1)}%)`"
+          ></div>
+        </div>
+        <div class="ratio-legend">
+          <span v-for="cat in MEAL_CATEGORIES" :key="cat.key" class="legend-item">
+            <span class="dot" :style="{ background: getCatColor(cat.key) }"></span>
+            {{ cat.emoji }} ￥{{ (stats.catTotalMap[cat.key] || 0).toFixed(0) }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <!-- 列表展示 -->
     <div v-if="records.length === 0" class="empty-state glass-card">
       <UtensilsCrossed :size="48" class="empty-icon" />
-      <p class="empty-text">{{ isTeamMode ? '搭子圈暂无选餐记录，大家快去 Roll 一个吧！' : '尚无午餐记录，快去 Roll 一个吧！' }}</p>
+      <p class="empty-text">{{ isTeamMode ? '搭子圈暂无选餐记录，大家快去 Roll 一个吧！' : '尚无饮食记录，快去 Roll 一个或补录一笔吧！' }}</p>
     </div>
 
     <div v-else class="records-list">
-      <div v-for="rec in records" :key="rec.id" class="record-item glass-card">
+      <div v-for="rec in records" :key="rec.id" class="record-item glass-card" :class="{ 'is-planned': rec.status === 'planned' }">
         <div class="item-date-col">
           <span class="date-str">{{ formatDate(rec.date) }}</span>
           <span class="time-str">{{ rec.drawnAt }}</span>
+          
+          <!-- 餐别 Tag -->
+          <span class="meal-cat-badge">
+            {{ getCatEmoji(rec.mealCategory) }} {{ getCatName(rec.mealCategory) }}
+          </span>
         </div>
 
         <div class="item-main-col">
           <div class="food-line">
             <span class="food-emoji">{{ rec.emoji }}</span>
             <span class="food-name">{{ rec.locationName }}</span>
+
+            <!-- 状态 📌 预选 vs ✅ 已打卡 -->
+            <span v-if="rec.status === 'planned'" class="status-tag planned-tag">
+              📌 预选计划
+            </span>
+            <span v-else class="status-tag confirmed-tag">
+              ✅ 已打卡
+            </span>
+
+            <!-- 个人金额展示 -->
+            <span v-if="!isTeamMode && rec.cost !== undefined" class="cost-amount-badge">
+              ￥{{ rec.cost.toFixed(2) }}
+            </span>
           </div>
 
           <div v-if="rec.note" class="food-note">
@@ -44,8 +100,18 @@
           </div>
         </div>
 
-        <!-- 记录编辑/删除操作 -->
+        <!-- 快捷转化 / 编辑删除操作 -->
         <div v-if="canManageRecord" class="admin-actions">
+          <!-- 预选转打卡按钮 -->
+          <button 
+            v-if="!isTeamMode && rec.status === 'planned'" 
+            class="action-btn-text confirm-btn" 
+            @click="handleQuickConfirmRecord(rec.id)"
+            title="确认吃了并记账"
+          >
+            💰 填金额打卡
+          </button>
+
           <button class="action-btn edit-btn" @click="openEditModal(rec)" title="修改记录">
             <Edit3 :size="16" />
           </button>
@@ -59,7 +125,7 @@
     <!-- 编辑/补录弹窗 Modal -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal-content">
-        <h3 class="modal-title">{{ isEditing ? '修改午餐记录' : (isTeamMode ? '搭子圈补录午餐记录' : '新增午餐记录 (管理员)') }}</h3>
+        <h3 class="modal-title">{{ isEditing ? '修改饮食打卡' : (isTeamMode ? '搭子圈补录记录' : '新增饮食/记账打卡') }}</h3>
         
         <form @submit.prevent="saveRecord" class="edit-form">
           <div class="form-item">
@@ -67,14 +133,43 @@
             <input type="date" v-model="form.date" required class="input-field" />
           </div>
 
+          <!-- 餐别分类选择器 -->
           <div class="form-item">
-            <label>选择地点：</label>
+            <label>餐别时段：</label>
+            <div class="meal-cat-radios">
+              <label v-for="cat in MEAL_CATEGORIES" :key="cat.key" class="radio-item">
+                <input type="radio" v-model="form.mealCategory" :value="cat.key" />
+                <span>{{ cat.emoji }} {{ cat.name }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-item">
+            <label>选择/输入地点：</label>
             <select v-model="form.locationId" @change="onLocationSelectChange" required class="input-field">
               <option v-for="loc in locations" :key="loc.id" :value="loc.id">
                 {{ loc.emoji }} {{ loc.name }}
               </option>
             </select>
           </div>
+
+          <!-- 个人模式：状态与花费金额 -->
+          <template v-if="!isTeamMode">
+            <div class="form-row-inline">
+              <div class="form-item flex-1">
+                <label>打卡状态：</label>
+                <select v-model="form.status" class="input-field">
+                  <option value="confirmed">✅ 已打卡 (确定吃了)</option>
+                  <option value="planned">📌 预选计划 (暂未吃)</option>
+                </select>
+              </div>
+
+              <div class="form-item flex-1">
+                <label>实付金额 (元)：</label>
+                <input type="number" step="0.1" v-model.number="form.cost" placeholder="如 25.5" class="input-field" />
+              </div>
+            </div>
+          </template>
 
           <div class="form-item">
             <label>用餐心得 / 备注：</label>
@@ -83,7 +178,7 @@
 
           <div class="modal-buttons">
             <button type="button" class="btn-secondary" @click="showModal = false">取消</button>
-            <button type="submit" class="btn-primary">保存记录</button>
+            <button type="submit" class="btn-primary">保存打卡记录</button>
           </div>
         </form>
       </div>
@@ -96,20 +191,20 @@ import { ref, computed } from 'vue';
 import { Calendar, Plus, UtensilsCrossed, Edit3, Trash2 } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
-import { useAdmin } from '../composables/useAdmin';
+import { useCloudSync } from '../composables/useCloudSync';
 import { soundEffects } from '../composables/useAudio';
-import type { DailyRecord } from '../types';
+import { MEAL_CATEGORIES, type DailyRecord, type MealCategory, type RecordStatus } from '../types';
 
-const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, addDailyRecord, settings } = useBentoStore();
+const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings } = useBentoStore();
 const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
-const { isAdminLoggedIn } = useAdmin();
+const { pushToCloud } = useCloudSync();
 
 const isTeamMode = computed(() => settings.value.activeMode === 'team' && Boolean(team.value));
 const records = computed(() => isTeamMode.value ? teamHistory.value : personalRecords.value);
 const locations = computed(() => isTeamMode.value ? teamLocations.value : personalLocations.value);
 
-const canAddRecord = computed(() => isTeamMode.value || (!isTeamMode.value && isAdminLoggedIn.value));
-const canManageRecord = computed(() => isTeamMode.value || (!isTeamMode.value && isAdminLoggedIn.value));
+const canAddRecord = computed(() => true); // 允许人人随时记账补录
+const canManageRecord = computed(() => true);
 
 const showModal = ref(false);
 const isEditing = ref(false);
@@ -117,12 +212,76 @@ const isEditing = ref(false);
 const form = ref({
   id: '',
   date: new Date().toISOString().slice(0, 10),
+  mealCategory: 'lunch' as MealCategory,
+  status: 'confirmed' as RecordStatus,
   locationId: '',
   locationName: '',
   emoji: '🍱',
   note: '',
+  cost: undefined as number | undefined,
   tags: [] as string[]
 });
+
+// 个人模式月度消费统计
+const stats = computed(() => {
+  const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const monthRecords = personalRecords.value.filter(r => r.date.startsWith(currentMonthStr));
+  
+  let monthlyTotal = 0;
+  let teaCount = 0;
+  let teaTotal = 0;
+  
+  const catTotalMap: Record<string, number> = { breakfast: 0, lunch: 0, tea: 0, dinner: 0, night: 0 };
+  
+  monthRecords.forEach(r => {
+    const cost = r.cost || 0;
+    monthlyTotal += cost;
+    const cat = r.mealCategory || 'lunch';
+    catTotalMap[cat] = (catTotalMap[cat] || 0) + cost;
+    if (cat === 'tea') {
+      teaCount += 1;
+      teaTotal += cost;
+    }
+  });
+
+  const catRatioMap: Record<string, number> = {};
+  MEAL_CATEGORIES.forEach(c => {
+    catRatioMap[c.key] = monthlyTotal > 0 ? (catTotalMap[c.key] / monthlyTotal) * 100 : 0;
+  });
+
+  const daysInMonth = new Date().getDate();
+  const dailyAvg = daysInMonth > 0 ? monthlyTotal / daysInMonth : 0;
+
+  return { monthlyTotal, teaCount, teaTotal, dailyAvg, catTotalMap, catRatioMap };
+});
+
+function getCatColor(catKey: MealCategory) {
+  switch (catKey) {
+    case 'breakfast': return '#F59E0B';
+    case 'lunch': return '#FF6B00';
+    case 'tea': return '#EC4899';
+    case 'dinner': return '#8B5CF6';
+    case 'night': return '#3B82F6';
+    default: return '#64748B';
+  }
+}
+
+function getCatEmoji(catKey?: MealCategory) {
+  return MEAL_CATEGORIES.find(c => c.key === (catKey || 'lunch'))?.emoji || '🍱';
+}
+
+function getCatName(catKey?: MealCategory) {
+  return MEAL_CATEGORIES.find(c => c.key === (catKey || 'lunch'))?.name.replace('池','') || '午餐';
+}
+
+function handleQuickConfirmRecord(recordId: string) {
+  const costStr = prompt('请输入实付金额（元）：', '20');
+  if (costStr === null) return;
+  const cost = parseFloat(costStr);
+  confirmDailyRecord(recordId, isNaN(cost) ? undefined : cost);
+  pushToCloud(true);
+  if (settings.value.soundEnabled) soundEffects.playTick(900);
+}
 
 function formatDate(dateStr: string) {
   if (!dateStr) return '';
@@ -152,10 +311,13 @@ function openAddModal() {
   form.value = {
     id: '',
     date: new Date().toISOString().slice(0, 10),
+    mealCategory: 'lunch',
+    status: 'confirmed',
     locationId: locations.value[0]?.id || '',
     locationName: locations.value[0]?.name || '',
     emoji: locations.value[0]?.emoji || '🍱',
     note: '',
+    cost: undefined,
     tags: locations.value[0]?.tags || []
   };
   showModal.value = true;
@@ -167,10 +329,13 @@ function openEditModal(rec: DailyRecord) {
   form.value = {
     id: rec.id,
     date: rec.date,
+    mealCategory: rec.mealCategory || 'lunch',
+    status: rec.status || 'confirmed',
     locationId: rec.locationId,
     locationName: rec.locationName,
     emoji: rec.emoji,
     note: rec.note || '',
+    cost: rec.cost,
     tags: rec.tags || []
   };
   showModal.value = true;
@@ -199,23 +364,34 @@ async function saveRecord() {
         updateRecord({
           id: form.value.id,
           date: form.value.date,
+          mealCategory: form.value.mealCategory,
+          status: form.value.status,
           locationId: form.value.locationId,
           locationName: form.value.locationName,
           emoji: form.value.emoji,
+          note: form.value.note,
+          cost: form.value.cost,
           tags: form.value.tags,
-          drawnAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-          note: form.value.note
+          drawnAt: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
         });
       } else {
-        const loc = locations.value.find(l => l.id === form.value.locationId);
-        if (loc) {
-          addDailyRecord(loc, form.value.date, form.value.note);
-        }
+        addDirectRecord({
+          date: form.value.date,
+          mealCategory: form.value.mealCategory,
+          status: form.value.status,
+          locationId: form.value.locationId,
+          locationName: form.value.locationName,
+          emoji: form.value.emoji,
+          note: form.value.note,
+          cost: form.value.cost,
+          tags: form.value.tags,
+        });
       }
+      pushToCloud(true);
     }
     showModal.value = false;
   } catch (e: any) {
-    alert(e.message || '保存记录失败');
+    alert(`保存记录失败: ${e.message || e}`);
   }
 }
 
@@ -227,6 +403,7 @@ async function confirmDelete(id: string) {
         await deleteTeamRecord(id);
       } else {
         deleteRecord(id);
+        pushToCloud(true);
       }
     } catch (e: any) {
       alert(e.message || '删除失败');
@@ -444,5 +621,165 @@ async function confirmDelete(id: string) {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 10px;
+}
+
+/* 消费统计看板 */
+.expense-dashboard {
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,247,242,0.9) 100%);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 142, 83, 0.25);
+  box-shadow: 0 4px 14px rgba(255, 107, 53, 0.06);
+}
+
+.main-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: #FFFFFF;
+  border-radius: var(--radius-md);
+  border: 1px solid #FFE4D6;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748B;
+}
+
+.stat-val {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #EA580C;
+}
+
+.tea-card .stat-val {
+  color: #DB2777;
+}
+
+.ratio-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ratio-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.ratio-progress-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #E2E8F0;
+}
+
+.progress-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.ratio-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 4px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.legend-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.meal-cat-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  background: #F1F5F9;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.status-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.status-tag.planned-tag {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.status-tag.confirmed-tag {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.cost-amount-badge {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #EA580C;
+  background: #FFEDD5;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.action-btn-text.confirm-btn {
+  background: #10B981;
+  color: #FFFFFF;
+  border: none;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.meal-cat-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+}
+
+.radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.radio-item input {
+  accent-color: #FF6B00;
 }
 </style>

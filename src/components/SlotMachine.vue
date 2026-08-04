@@ -1,5 +1,19 @@
 <template>
   <div class="slot-machine-container">
+    <!-- 场景餐池 Tab 切换器 -->
+    <div class="meal-categories-selector glass-card">
+      <button 
+        v-for="cat in MEAL_CATEGORIES" 
+        :key="cat.key" 
+        class="cat-tab-btn" 
+        :class="{ active: selectedCategory === cat.key }"
+        @click="handleSelectCategory(cat.key)"
+      >
+        <span class="cat-emoji">{{ cat.emoji }}</span>
+        <span class="cat-name">{{ cat.name }}</span>
+      </button>
+    </div>
+
     <!-- 团队模式：今日已有团队选定结果卡片 -->
     <div v-if="hasTodayTeamResult && !forceShowMachine" class="team-result-card glass-card">
       <div class="team-card-header">
@@ -45,7 +59,7 @@
           <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
           <span class="status-text">
             <template v-if="settings.activeMode === 'team'">[👥 搭子待抽池] </template>
-            待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
+            {{ currentCatMeta?.emoji }} {{ currentCatMeta?.name }}待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
           </span>
 
           <label class="weekly-toggle-badge" title="开启后本周 (周一至周日) 已抽中过的餐厅不会再次重抽">
@@ -70,7 +84,7 @@
         <!-- 栏目标题 Row -->
         <div class="reels-header-row">
           <div class="column-title">类型/口味</div>
-          <div class="column-title main-title">今日午餐地</div>
+          <div class="column-title main-title">{{ currentCatMeta?.emoji }} 今日{{ currentCatMeta?.name.replace('池','') }}</div>
           <div class="column-title">吃货运势</div>
         </div>
 
@@ -131,7 +145,7 @@
               <Dice5 v-if="!isRolling" :size="24" class="btn-icon" />
               <RefreshCw v-else :size="24" class="btn-icon spin-icon" />
               <span class="btn-text">
-                {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮搭子选午餐！(ROLL)' : '帮我选午餐！(ROLL)')) }}
+                {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮搭子选午餐！(ROLL)' : `帮我选${currentCatMeta?.name || ''}！(ROLL)`)) }}
               </span>
             </div>
           </button>
@@ -140,6 +154,58 @@
             ✨ {{ settings.activeMode === 'team' ? '午餐搭子协同：任何人完成 Roll 后搭子圈全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
           </p>
         </div>
+
+        <!-- 📅 今日便当打卡清单 (5槽位) -->
+        <div v-if="settings.activeMode === 'personal'" class="daily-bento-checklist glass-card">
+          <div class="checklist-header">
+            <CalendarCheck :size="18" class="text-orange" />
+            <span>📅 今日便当打卡清单</span>
+          </div>
+          <div class="checklist-items">
+            <div v-for="cat in MEAL_CATEGORIES" :key="cat.key" class="check-item-row" :class="{ 'is-active': selectedCategory === cat.key }">
+              <div class="cat-label">
+                <span class="cat-icon">{{ cat.emoji }}</span>
+                <span class="cat-title">{{ cat.name.replace('池','') }}</span>
+              </div>
+
+              <div class="cat-content">
+                <template v-if="getTodayRecordByCat(cat.key)">
+                  <span class="food-emoji">{{ getTodayRecordByCat(cat.key)?.emoji }}</span>
+                  <span class="food-name">{{ getTodayRecordByCat(cat.key)?.locationName }}</span>
+                  
+                  <span v-if="getTodayRecordByCat(cat.key)?.status === 'planned'" class="badge-status planned">📌 预选</span>
+                  <span v-else class="badge-status confirmed">
+                    ✅ {{ getTodayRecordByCat(cat.key)?.cost ? `￥${getTodayRecordByCat(cat.key)?.cost}` : '已打卡' }}
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="empty-text">尚无安排</span>
+                </template>
+              </div>
+
+              <div class="cat-actions">
+                <button 
+                  v-if="!getTodayRecordByCat(cat.key)" 
+                  class="mini-btn action-roll"
+                  @click="handleSelectCategory(cat.key)"
+                >
+                  🎲 去摇号
+                </button>
+                <template v-else-if="getTodayRecordByCat(cat.key)?.status === 'planned'">
+                  <button class="mini-btn action-reroll" @click="handleSelectCategory(cat.key)" title="切到此餐池重新摇号">
+                    🔄 重Roll
+                  </button>
+                  <button class="mini-btn action-confirm" @click="handleQuickConfirm(getTodayRecordByCat(cat.key)!.id)" title="确认吃了">
+                    ✅ 吃了
+                  </button>
+                </template>
+                <template v-else>
+                  <span class="done-check">✓</span>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
   </div>
@@ -147,12 +213,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Sparkles, Dice5, RefreshCw, RotateCcw, Check } from 'lucide-vue-next';
+import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck } from 'lucide-vue-next';
 import confetti from 'canvas-confetti';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { soundEffects } from '../composables/useAudio';
-import type { BentoLocation } from '../types';
+import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
 
 const emit = defineEmits(['roll-complete']);
 
@@ -164,6 +230,10 @@ const {
   resetPool,
   settings,
   addDailyRecord,
+  records,
+  selectedCategory,
+  setSelectedCategory,
+  confirmDailyRecord,
 } = useBentoStore();
 const {
   locations: teamLocations,
@@ -171,8 +241,38 @@ const {
   roll: rollTeam,
 } = useTeamWorkspace();
 
+const currentCatMeta = computed(() => MEAL_CATEGORIES.find(c => c.key === selectedCategory.value));
+
+function handleSelectCategory(catKey: MealCategory) {
+  if (settings.value.soundEnabled) soundEffects.playTick(600);
+  setSelectedCategory(catKey);
+  prepareReels();
+}
+
+function getTodayRecordByCat(catKey: MealCategory) {
+  return records.value.find(r => r.date === todayStr.value && (r.mealCategory || 'lunch') === catKey);
+}
+
+function handleQuickConfirm(recordId: string) {
+  const costStr = prompt('请输入实付金额（元，非必填）：', '');
+  const cost = costStr ? parseFloat(costStr) : undefined;
+  confirmDailyRecord(recordId, isNaN(cost!) ? undefined : cost);
+  if (settings.value.soundEnabled) soundEffects.playTick(900);
+}
+
+function isLocationMatchingCategory(loc: BentoLocation, category: MealCategory): boolean {
+  if (!loc.mealCategories || loc.mealCategories.length === 0) return true;
+  return loc.mealCategories.includes(category);
+}
+
 const locations = computed(() => settings.value.activeMode === 'team' ? teamLocations.value : personalLocations.value);
-const availablePool = computed(() => settings.value.activeMode === 'team' ? teamLocations.value : personalAvailablePool.value);
+const availablePool = computed(() => {
+  if (settings.value.activeMode === 'team') {
+    const categoryPool = teamLocations.value.filter(loc => isLocationMatchingCategory(loc, selectedCategory.value));
+    return categoryPool.length > 0 ? categoryPool : teamLocations.value;
+  }
+  return personalAvailablePool.value;
+});
 const drawnList = computed(() => settings.value.activeMode === 'team' ? [] : personalDrawnList.value);
 const isPoolEmpty = computed(() => availablePool.value.length === 0);
 const todayTeamResult = computed(() => teamTodayResult.value);
@@ -745,13 +845,13 @@ function handleResetPool() {
 
 .team-card-actions {
   display: flex;
-  flex-direction: column;
   gap: 10px;
   width: 100%;
   margin-top: 8px;
 }
 
 .team-card-actions button {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -760,5 +860,188 @@ function handleResetPool() {
   border-radius: var(--radius-md);
   font-weight: 700;
   cursor: pointer;
+}
+
+/* 场景餐池 Selector */
+.meal-categories-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.cat-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: #64748B;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cat-tab-btn:hover {
+  background: rgba(255, 107, 53, 0.08);
+  color: var(--primary);
+}
+
+.cat-tab-btn.active {
+  background: #FF6B00;
+  color: #FFFFFF;
+  box-shadow: 0 3px 10px rgba(255, 107, 0, 0.25);
+}
+
+.cat-emoji {
+  font-size: 1rem;
+}
+
+/* 今日便当清单 (Daily Bento Checklist) */
+.daily-bento-checklist {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 237, 213, 0.8);
+}
+
+.checklist-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #334155;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #E2E8F0;
+}
+
+.checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.check-item-row.is-active {
+  border-color: #FDBA74;
+  background: #FFF7ED;
+}
+
+.cat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 90px;
+}
+
+.cat-icon {
+  font-size: 1.1rem;
+}
+
+.cat-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.cat-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.food-emoji {
+  font-size: 1.1rem;
+}
+
+.food-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.badge-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.badge-status.planned {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.badge-status.confirmed {
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.empty-text {
+  font-size: 0.78rem;
+  color: #94A3B8;
+  font-style: italic;
+}
+
+.cat-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-btn {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-roll {
+  background: #FF6B00;
+  color: #FFFFFF;
+}
+
+.action-reroll {
+  background: #FFF7ED;
+  color: #EA580C;
+  border: 1px solid #FFD8B3;
+}
+
+.action-confirm {
+  background: #10B981;
+  color: #FFFFFF;
+}
+
+.done-check {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #10B981;
 }
 </style>

@@ -199,6 +199,21 @@
             </div>
           </div>
 
+          <!-- 适用餐池多选框 -->
+          <div class="form-item">
+            <label>适用餐池 (多选，不勾选默认全适用)：</label>
+            <div class="meal-categories-checkboxes">
+              <label v-for="cat in MEAL_CATEGORIES" :key="cat.key" class="cat-checkbox-item">
+                <input 
+                  type="checkbox" 
+                  :value="cat.key" 
+                  v-model="selectedLocCategories"
+                />
+                <span>{{ cat.emoji }} {{ cat.name }}</span>
+              </label>
+            </div>
+          </div>
+
           <div class="modal-buttons">
             <button type="button" class="btn-secondary" @click="showLocModal = false">取消</button>
             <button type="submit" class="btn-primary">保存地点</button>
@@ -290,9 +305,10 @@ import { useCloudSync } from '../composables/useCloudSync';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { soundEffects } from '../composables/useAudio';
 import { parseBatchLocationsText } from '../utils/parseBatchText';
-import type { BentoLocation } from '../types';
+import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
 
 const emit = defineEmits(['close']);
+
 
 const { locations: personalLocations, addLocation, batchAddLocations, updateLocation, deleteLocation, batchDeleteLocations: batchDeletePersonalLocations, resetPool, restoreDefaultLocations, exportDataJSON, importDataJSON, settings } = useBentoStore();
 const { logout, changePassword } = useAdmin();
@@ -396,6 +412,7 @@ const pwdForm = ref({ oldPwd: '', newPwd: '' });
 // 地点编辑弹窗表单
 const showLocModal = ref(false);
 const isEditLoc = ref(false);
+const selectedLocCategories = ref<MealCategory[]>([]);
 const locForm = ref<BentoLocation>({
   id: '',
   name: '',
@@ -1111,6 +1128,31 @@ function handleImportFile(event: Event) {
 .loc-card.is-selected {
   border-color: #FF6B00;
   background: #FFF7ED;
+}
+
+.meal-categories-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+}
+
+.cat-checkbox-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.cat-checkbox-item input {
+  accent-color: #FF6B00;
 }
 </style>
 

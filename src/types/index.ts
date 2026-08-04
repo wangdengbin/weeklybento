@@ -1,3 +1,22 @@
+export type MealCategory = 'breakfast' | 'lunch' | 'tea' | 'dinner' | 'night';
+export type RecordStatus = 'planned' | 'confirmed';
+
+export interface MealCategoryInfo {
+  key: MealCategory;
+  name: string;
+  emoji: string;
+  timeRange: string;
+  description: string;
+}
+
+export const MEAL_CATEGORIES: MealCategoryInfo[] = [
+  { key: 'breakfast', name: '早餐池', emoji: '🌅', timeRange: '06:00-10:30', description: '快捷热乎的早晨能量' },
+  { key: 'lunch', name: '午餐池', emoji: '☀️', timeRange: '10:30-14:00', description: '高效丰盛的工作日正餐' },
+  { key: 'tea', name: '奶茶/下午茶', emoji: '🧋', timeRange: '14:00-17:00', description: '解压续命的饮品甜点' },
+  { key: 'dinner', name: '晚餐池', emoji: '🌙', timeRange: '17:00-21:00', description: '休闲舒适的傍晚聚餐' },
+  { key: 'night', name: '夜宵池', emoji: '🌌', timeRange: '21:00-06:00', description: '深夜解馋的特调好味' },
+];
+
 export interface BentoLocation {
   id: string;
   name: string;
@@ -8,17 +27,21 @@ export interface BentoLocation {
   weight: number; // 权重
   isDrawn: boolean; // 在当前轮次中是否已被抽中
   createdAt: number;
+  mealCategories?: MealCategory[]; // 支持的餐池分类，不传默认全选/包含午餐
 }
 
 export interface DailyRecord {
   id: string;
   date: string; // YYYY-MM-DD
+  mealCategory?: MealCategory; // 餐池分类
+  status?: RecordStatus; // 'planned' (预选计划) | 'confirmed' (确定打卡)
   locationId: string;
   locationName: string;
   emoji: string;
   tags: string[];
   drawnAt: string; // HH:mm:ss
   note?: string; // 备注/用餐心得
+  cost?: number; // 实付金额 (仅个人模式生效)
 }
 
 export interface CloudSyncConfig {
@@ -32,6 +55,7 @@ export interface CloudSyncConfig {
 
 export interface TeamRollResult {
   date: string; // YYYY-MM-DD
+  mealCategory?: MealCategory; // 餐池分类
   locationId: string;
   locationName: string;
   emoji: string;
@@ -51,3 +75,4 @@ export interface AppSettings {
   personalSyncConfig?: CloudSyncConfig; // 个人云端同步设置
   cloudSync?: CloudSyncConfig; // 兼容逻辑
 }
+

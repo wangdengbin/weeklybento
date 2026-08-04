@@ -216,7 +216,7 @@
 import { ref, watch } from 'vue';
 import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
-import { useTeamWorkspace } from '../composables/useTeamWorkspace';
+import { useTeamWorkspace, getErrorMessage } from '../composables/useTeamWorkspace';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
 
@@ -275,6 +275,10 @@ watch(
   { immediate: true }
 );
 
+watch([joinPublicId, teamName, actionMode], () => {
+  errorMessage.value = '';
+});
+
 function selectInviteText() {
   if (inviteTextArea.value) {
     inviteTextArea.value.focus();
@@ -290,14 +294,20 @@ async function handleSwitch(publicId: string) {
 }
 
 async function handleCreate() {
-  await createTeam(teamName.value, usePersonalMenu.value ? personalLocations.value : []);
-  teamName.value = '';
-  switchMode('team');
+  errorMessage.value = '';
+  try {
+    await createTeam(teamName.value, usePersonalMenu.value ? personalLocations.value : []);
+    teamName.value = '';
+    switchMode('team');
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err);
+  }
 }
 
 async function handleJoin() {
   let targetId = joinPublicId.value.trim();
   let inviteToken: string | undefined;
+  errorMessage.value = '';
 
   try {
     if (targetId.startsWith('http')) {
@@ -307,11 +317,13 @@ async function handleJoin() {
       if (teamParam) targetId = teamParam;
       if (inviteParam) inviteToken = inviteParam;
     }
-  } catch (e) {}
 
-  await openTeam(targetId, inviteToken);
-  joinPublicId.value = '';
-  switchMode('team');
+    await openTeam(targetId, inviteToken);
+    joinPublicId.value = '';
+    switchMode('team');
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err);
+  }
 }
 
 async function shareTeam() {
@@ -342,9 +354,14 @@ async function shareTeam() {
 async function handleDeleteTeam(t: { id: string; name: string }) {
   if (confirm(`⚠️ 危险操作：确定要解散搭子圈“${t.name}”吗？此操作不可恢复！`)) {
     soundEffects.playTick(300);
-    await deleteTeam(t.id);
-    if (myTeams.value.length === 0) {
-      switchMode('personal');
+    errorMessage.value = '';
+    try {
+      await deleteTeam(t.id);
+      if (myTeams.value.length === 0) {
+        switchMode('personal');
+      }
+    } catch (err) {
+      errorMessage.value = getErrorMessage(err);
     }
   }
 }
@@ -352,9 +369,14 @@ async function handleDeleteTeam(t: { id: string; name: string }) {
 async function handleLeaveTeam(t: { id: string; name: string }) {
   if (confirm(`确定要退出搭子圈“${t.name}”吗？`)) {
     soundEffects.playTick(400);
-    await leaveTeam(t.id);
-    if (myTeams.value.length === 0) {
-      switchMode('personal');
+    errorMessage.value = '';
+    try {
+      await leaveTeam(t.id);
+      if (myTeams.value.length === 0) {
+        switchMode('personal');
+      }
+    } catch (err) {
+      errorMessage.value = getErrorMessage(err);
     }
   }
 }
