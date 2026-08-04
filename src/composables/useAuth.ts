@@ -20,6 +20,12 @@ const userEmail = computed(() => {
 async function initAuth() {
   if (!supabase) return;
   
+  if (window.location.hash.includes('error=') || window.location.hash.includes('error_code=')) {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    window.history.replaceState({}, '', url);
+  }
+
   try {
     const { data } = await supabase.auth.getSession();
     session.value = data.session;
