@@ -1,7 +1,14 @@
 <template>
   <div v-if="visible" class="modal-overlay" @click.self="closeModal">
     <div class="modal-content admin-modal">
-      <div v-if="!isAdminLoggedIn" class="login-box">
+      <div v-if="settings.activeMode === 'team' && !canManageTeam" class="login-box">
+        <div class="lock-icon-wrap"><ShieldAlert :size="36" class="lock-icon" /></div>
+        <h3 class="login-title">没有管理权限</h3>
+        <p class="login-desc">只有团队所有者或管理员可以修改团队菜单。</p>
+        <button type="button" class="btn-secondary" @click="closeModal">关闭</button>
+      </div>
+
+      <div v-else-if="!isAdminLoggedIn" class="login-box">
         <div class="lock-icon-wrap">
           <ShieldAlert :size="36" class="lock-icon" />
         </div>
@@ -43,14 +50,16 @@ import { ref, watch, nextTick } from 'vue';
 import { ShieldAlert } from 'lucide-vue-next';
 import { useAdmin } from '../composables/useAdmin';
 import { useBentoStore } from '../composables/useBentoStore';
+import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { soundEffects } from '../composables/useAudio';
 import AdminPanel from './AdminPanel.vue';
 
 const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits(['close']);
 
-const { isAdminLoggedIn, verifyPassword } = useAdmin();
+const { isAdminLoggedIn, verifyPassword, grantAdminSession } = useAdmin();
 const { settings } = useBentoStore();
+const { canManage: canManageTeam } = useTeamWorkspace();
 
 const passwordInput = ref('');
 const errorMsg = ref('');
@@ -58,6 +67,9 @@ const pwdInputRef = ref<HTMLInputElement | null>(null);
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
+    if (settings.value.activeMode === 'team' && canManageTeam.value) {
+      grantAdminSession();
+    }
     passwordInput.value = '';
     errorMsg.value = '';
     nextTick(() => {

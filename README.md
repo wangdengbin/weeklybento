@@ -10,13 +10,13 @@
 - 🎵 **原生 Web Audio API 音效**：无外部音频依赖，转动喀哒声、按键声与中奖欢呼。
 - 🎉 **Canvas 撒花特效**：中奖时触发全屏中奖彩带。
 - 🔄 **轮次不重复机制**：已抽中的地点自动移出待抽池，直至全吃过一遍或管理员手动重置。
-- ☁️ **全云端存储 (免自建后端)**：基于环境变量直连 **JSONBin.io** 云数据库，数据自动跨设备（手机/电脑）实时同步。
+- 👥 **Supabase 团队空间**：团队菜单、邀请成员、角色权限与抽签结果实时同步，支持独立分享链接。
 - 🔑 **管理员控制台 (密码保护)**：
   - 默认初始密码：`admin888`
   - 隐秘暗门：连续点击 Logo 或右上角图标输入密码解锁。
   - 地点池管理：新增、编辑、删除地点、标签、预算、推荐菜，或恢复预设地点。
   - 历史记录管理：日历查看与修改每日用餐打卡。
-  - **安全隐蔽**：云端 Key 与 Endpoint 托管于 `.env` 环境变量，打包打包后直接带入，在管理员界面**禁止查看与修改明文密钥**。
+  - 团队权限由 Supabase Auth 与 RLS 控制，所有者和管理员才能修改团队菜单。
 
 - 🌐 **在线访问体验**：[https://wangdengbin.github.io/weeklybento/](https://wangdengbin.github.io/weeklybento/)
 
@@ -66,51 +66,22 @@ git push origin v1.0.0
 
 ---
 
-## ☁️ 环境变量配置 (.env)
+## ☁️ Supabase 配置
 
-项目根目录下的 `.env` 文件包含 JSONBin 云数据库凭据（项目打包时会自动内嵌到应用代码中）：
+1. 在 Supabase 创建项目。
+2. 打开 **Authentication -> Sign In / Providers**，找到 **Anonymous** 并勾选启用匿名登录（Enable Anonymous sign-ins）。
+3. 打开 **SQL Editor**，完整执行 [`supabase/schema.sql`](supabase/schema.sql)。
+4. 从 **Project Settings -> API** 获取项目 URL 和公开的 publishable/anon key。
+5. 创建 `.env`：
 
 ```env
-# JSONBin 云数据库配置
-VITE_JSONBIN_API_URL=https://api.jsonbin.io/v3/b/xxxxxxxxxxxxxxxx
-VITE_JSONBIN_API_KEY=$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
 ```
 
----
+`anon key` 可以出现在前端构建产物中；不要在前端使用 `service_role key`。实际数据权限由 `schema.sql` 中的 RLS 策略控制。
 
-## 📖 JSONBin.io 账号及 Bin / Key 申请详细流程
-
-如果你想创建属于自己的独立 JSONBin 云存储，可以按照以下步骤申请：
-
-### 1. 注册并登录
-访问 [https://jsonbin.io](https://jsonbin.io)，点击右上角 **Log In / Sign Up**，推荐直接使用 **GitHub / Google** 账号一键登录。
-
-### 2. 获取 API Key (Master Key / Access Key)
-1. 登录后打开左侧菜单栏 **API Keys**（或访问 [https://jsonbin.io/app/api-keys](https://jsonbin.io/app/api-keys)）。
-2. 你可以使用页面中默认生成的 **Master Key**，或者在 **Access Keys** 中新建专用的 **Access Key**（格式形如：`$2a$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`）。项目已同时兼容 `X-Master-Key` 与 `X-Access-Key` 请求头。
-
-### 3. 创建数据 Bin
-1. 点击左侧菜单栏 **Bins** ➔ **Create Bin**。
-2. 在 JSON 代码编辑框中粘贴以下初始化结构：
-   ```json
-   {
-     "locations": [],
-     "records": []
-   }
-   ```
-3. 选项保留为 **Private**（私有库保护隐私），点击右下角 **Create** 提交。
-4. 提交后页面顶部会生成对应的 **Bin ID**（例如 `66b1a2c3e4b0123456789abc`）。
-5. 你的 **API Endpoint** 格式即为：
-   ```text
-   https://api.jsonbin.io/v3/b/<你的Bin_ID>
-   ```
-
-### 4. 替换环境变量
-将上述申请到的 **API Endpoint** 和 **Master Key** 填写到项目的 `.env` 文件中即可：
-```env
-VITE_JSONBIN_API_URL=https://api.jsonbin.io/v3/b/<你的Bin_ID>
-VITE_JSONBIN_API_KEY=<你的Master_Key>
-```
+团队邀请链接包含团队 ID 和可轮换的邀请码。用户首次打开链接后会建立匿名 Supabase 会话、加入团队，并从地址栏移除邀请码。
 
 ---
 
@@ -118,11 +89,12 @@ VITE_JSONBIN_API_KEY=<你的Master_Key>
 
 ```
 WeeklyBento/
-├── .env                        # 项目环境变量 (JSONBin 云数据库 URL & Key)
+├── .env                        # Supabase URL 与公开 anon key
 ├── index.html                  # Viewport 移动端适配与 HTML 入口
 ├── package.json                # 项目依赖与运行脚本
 ├── vite.config.ts              # Vite 构建配置
-├── README.md                   # 项目使用与申请说明文档
+├── README.md                   # 项目使用与部署说明
+├── supabase/schema.sql         # 团队数据表、RLS、RPC 与 Realtime 配置
 └── src/
     ├── main.ts                 # Vue 3 入口
     ├── App.vue                 # 主应用视图与数据挂载

@@ -1,11 +1,11 @@
 import { ref, computed, watch } from 'vue';
 import type { BentoLocation, DailyRecord, AppSettings } from '../types';
 
-const STORAGE_KEY_LOCATIONS = 'weekly_bento_locations_v1';
+const STORAGE_KEY_LOCATIONS = 'weekly_bento_locations_v3';
 const STORAGE_KEY_RECORDS = 'weekly_bento_records_v1';
 const STORAGE_KEY_SETTINGS = 'weekly_bento_settings_v1';
 
-// 预设默认午餐地点池
+// 预设默认午餐地点池 (还原 16 项经典地点)
 const DEFAULT_LOCATIONS: BentoLocation[] = [
   { id: '1', name: '隆江猪脚饭', emoji: '🍱', tags: ['快餐', '肉食', '高能量'], priceRange: '￥18-28', recommendedDish: '双拼猪脚饭加卤蛋', weight: 1, isDrawn: false, createdAt: Date.now() },
   { id: '2', name: '日式拉面', emoji: '🍜', tags: ['汤面', '日料', '热乎'], priceRange: '￥25-45', recommendedDish: '豚骨叉烧拉面', weight: 1, isDrawn: false, createdAt: Date.now() + 1 },
@@ -52,6 +52,15 @@ function loadSettings(): AppSettings {
     adminPassword: 'admin888',
     antiRepeatMode: 'round',
     soundEnabled: true,
+    activeMode: 'personal',
+    personalSyncConfig: {
+      enabled: false,
+      provider: 'jsonbin',
+      apiUrl: '',
+      apiKey: '',
+      keyType: 'auto',
+      autoSync: false,
+    },
   };
   try {
     const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
@@ -164,6 +173,11 @@ export function useBentoStore() {
     locations.value = locations.value.filter(l => l.id !== id);
   }
 
+  function batchDeleteLocations(ids: string[]) {
+    const set = new Set(ids);
+    locations.value = locations.value.filter(l => !set.has(l.id));
+  }
+
   function restoreDefaultLocations() {
     locations.value = JSON.parse(JSON.stringify(DEFAULT_LOCATIONS));
   }
@@ -204,6 +218,25 @@ export function useBentoStore() {
     }
   }
 
+  function batchAddLocations(items: Omit<BentoLocation, 'id' | 'isDrawn' | 'createdAt'>[], overwrite = false) {
+    const formatted: BentoLocation[] = items.map((item, idx) => ({
+      ...item,
+      id: (Date.now() + idx).toString() + Math.random().toString(36).substring(2, 5),
+      isDrawn: false,
+      createdAt: Date.now() + idx,
+    }));
+
+    if (overwrite) {
+      locations.value = formatted;
+    } else {
+      locations.value.push(...formatted);
+    }
+  }
+
+  function switchMode(mode: 'personal' | 'team') {
+    settings.value.activeMode = mode;
+  }
+
   return {
     locations,
     records,
@@ -218,10 +251,13 @@ export function useBentoStore() {
     updateRecord,
     deleteRecord,
     addLocation,
+    batchAddLocations,
     updateLocation,
     deleteLocation,
+    batchDeleteLocations,
     restoreDefaultLocations,
     exportDataJSON,
     importDataJSON,
+    switchMode,
   };
 }

@@ -18,6 +18,10 @@ export function useAdmin() {
     isAdminLoggedIn.value = false;
   }
 
+  function grantAdminSession() {
+    isAdminLoggedIn.value = true;
+  }
+
   function changePassword(oldPwd: string, newPwd: string): { success: boolean; message: string } {
     if (oldPwd !== settings.value.adminPassword) {
       return { success: false, message: '旧密码输入错误' };
@@ -33,6 +37,7 @@ export function useAdmin() {
     isAdminLoggedIn,
     verifyPassword,
     logout,
+    grantAdminSession,
     changePassword,
   };
 }

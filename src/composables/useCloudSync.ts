@@ -1,68 +1,94 @@
 import { ref } from 'vue';
 import { useBentoStore } from './useBentoStore';
+import type { CloudSyncConfig } from '../types';
 
 const isSyncing = ref(false);
 const syncLog = ref('');
 const lastSyncedAt = ref<string>('');
 
-// 读取环境变量
-const ENV_API_URL = import.meta.env.VITE_JSONBIN_API_URL || '';
-const ENV_API_KEY = import.meta.env.VITE_JSONBIN_API_KEY || '';
+type JsonbinKeyType = 'master' | 'access';
 
-/**
- * 自动双重 Header 兼容请求：
- * JSONBin 如果在请求头中同时存在 X-Master-Key 与 X-Access-Key，会强制校验 X-Master-Key。
- * 此函数先使用 X-Master-Key 请求，若遇到 401/403，自动无缝切换为 X-Access-Key 重新请求，确保 Master Key 和 Access Key 均能 100% 成功。
- */
-async function fetchJsonbinWithFallback(url: string, method: string, payload?: any): Promise<Response> {
-  if (!ENV_API_URL || !ENV_API_KEY) {
-    throw new Error('环境变量中未配置 JSONBin 凭据');
+function resolveSyncConfig(overrideConfig?: Partial<CloudSyncConfig>): CloudSyncConfig {
+  const { settings } = useBentoStore();
+  let config: CloudSyncConfig = {
+    enabled: true,
+    provider: 'jsonbin',
+    apiUrl: '',
+    apiKey: '',
+    keyType: 'auto',
+    autoSync: false,
+  };
+  const personalConfig = settings.value.personalSyncConfig;
+  config.apiUrl = personalConfig?.apiUrl?.trim() || '';
+  config.apiKey = personalConfig?.apiKey?.trim() || '';
+  config.keyType = personalConfig?.keyType || 'auto';
+
+  if (overrideConfig) {
+    config = { ...config, ...overrideConfig };
   }
 
-  // 第一次尝试：使用 X-Master-Key
-  const headersMaster: Record<string, string> = {
+  return config;
+}
+
+function getConfigError(config: CloudSyncConfig): string | null {
+  if (!config.apiUrl) return '未配置云端 API URL (如 JSONBin 链接)';
+  if (!config.apiKey) return '未配置云端 API Key';
+  if (!/^https:\/\/api\.jsonbin\.io\/v3\/b\/[^/?]+\/?$/.test(config.apiUrl)) {
+    return 'API URL 格式不正确，标准格式应为 https://api.jsonbin.io/v3/b/<BIN_ID>';
+  }
+  return null;
+}
+
+function getJsonbinHeaders(apiKey: string, keyType: JsonbinKeyType): Record<string, string> {
+  return {
     'Content-Type': 'application/json',
-    'X-Master-Key': ENV_API_KEY,
+    [keyType === 'master' ? 'X-Master-Key' : 'X-Access-Key']: apiKey,
   };
+}
 
-  let resp = await fetch(url, {
-    method,
-    headers: headersMaster,
-    body: payload ? JSON.stringify(payload) : undefined,
-  });
+async function fetchJsonbin(config: CloudSyncConfig, method: string, payload?: unknown): Promise<Response> {
+  const configError = getConfigError(config);
+  if (configError) throw new Error(configError);
 
-  // 如果遇到 401 / 403 身份不匹配，自动无缝降级重试 X-Access-Key
-  if (resp.status === 401 || resp.status === 403) {
-    const headersAccess: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Access-Key': ENV_API_KEY,
-    };
-    const respRetry = await fetch(url, {
+  const keyTypeSetting = config.keyType || 'auto';
+  const keyTypes: JsonbinKeyType[] = keyTypeSetting === 'auto'
+    ? ['master', 'access']
+    : [keyTypeSetting as JsonbinKeyType];
+
+  let response: Response | undefined;
+  for (const keyType of keyTypes) {
+    response = await fetch(config.apiUrl, {
       method,
-      headers: headersAccess,
+      headers: getJsonbinHeaders(config.apiKey, keyType),
       body: payload ? JSON.stringify(payload) : undefined,
     });
-
-    if (respRetry.ok) {
-      return respRetry;
-    }
+    if (response.ok || ![401, 403].includes(response.status)) return response;
   }
 
-  return resp;
+  return response!;
+}
+
+async function getResponseError(response: Response): Promise<Error> {
+  const detail = await response.text();
+  if ([401, 403].includes(response.status)) {
+    return new Error(
+      `JSONBin 鉴权失败 (${response.status})：API Key 无效，或该 Bin 不属于此 Key 对应的账号。`,
+    );
+  }
+  return new Error(`HTTP ${response.status}: ${detail}`);
 }
 
 export function useCloudSync() {
   const { locations, records, importDataJSON } = useBentoStore();
 
-  // 上传当前 state 数据至云端数据库
-  async function pushToCloud(silent = false): Promise<{ success: boolean; message: string }> {
-    if (!ENV_API_URL || !ENV_API_KEY) {
-      return { success: false, message: '环境变量中未配置 JSONBin 凭据' };
-    }
+  async function pushToCloud(silent = false, customConfig?: Partial<CloudSyncConfig>): Promise<{ success: boolean; message: string }> {
+    const config = resolveSyncConfig(customConfig);
+    const configError = getConfigError(config);
+    if (configError) return { success: false, message: configError };
 
     if (!silent) {
       isSyncing.value = true;
-      syncLog.value = '正在保存至云端...';
+      syncLog.value = '正在推送最新数据至云端...';
     }
 
     const payload = {
@@ -72,61 +98,53 @@ export function useCloudSync() {
     };
 
     try {
-      const resp = await fetchJsonbinWithFallback(ENV_API_URL, 'PUT', payload);
+      const response = await fetchJsonbin(config, 'PUT', payload);
+      if (!response.ok) throw await getResponseError(response);
 
-      if (resp.ok) {
-        lastSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        syncLog.value = `已同步到云端 (${lastSyncedAt.value})`;
-        isSyncing.value = false;
-        return { success: true, message: '成功推送数据到 JSONBin 云数据库！' };
-      } else {
-        const errText = await resp.text();
-        throw new Error(`HTTP ${resp.status}: ${errText}`);
-      }
-    } catch (e: any) {
+      lastSyncedAt.value = new Date().toLocaleTimeString('zh-CN', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      syncLog.value = `已成功推送到云端 (${lastSyncedAt.value})`;
+      return { success: true, message: '成功推送数据到云数据库！' };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      syncLog.value = `云端推送失败: ${message}`;
+      return { success: false, message: `同步推送失败: ${message}` };
+    } finally {
       isSyncing.value = false;
-      syncLog.value = `云端保存失败: ${e.message || e}`;
-      return { success: false, message: `云端同步失败: ${e.message || e}` };
     }
   }
 
-  // 从云端拉取最新数据
-  async function pullFromCloud(silent = false): Promise<{ success: boolean; message: string }> {
-    if (!ENV_API_URL || !ENV_API_KEY) {
-      return { success: false, message: '环境变量中未配置 JSONBin 凭据' };
-    }
+  async function pullFromCloud(silent = false, customConfig?: Partial<CloudSyncConfig>): Promise<{ success: boolean; message: string }> {
+    const config = resolveSyncConfig(customConfig);
+    const configError = getConfigError(config);
+    if (configError) return { success: false, message: configError };
 
     if (!silent) {
       isSyncing.value = true;
-      syncLog.value = '正在从云端获取最新数据...';
+      syncLog.value = '正在从云端拉取最新数据...';
     }
 
     try {
-      const resp = await fetchJsonbinWithFallback(ENV_API_URL, 'GET');
+      const response = await fetchJsonbin(config, 'GET');
+      if (!response.ok) throw await getResponseError(response);
 
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`HTTP ${resp.status}: ${errText}`);
-      }
-
-      const data = await resp.json();
+      const data = await response.json();
       const recordObj = data.record || data;
-
-      // 更新本地 Store
       const success = importDataJSON(JSON.stringify(recordObj));
-      isSyncing.value = false;
+      if (!success) return { success: false, message: '云端返回的数据结构格式不正确' };
 
-      if (success) {
-        lastSyncedAt.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        syncLog.value = `已从云端拉取最新数据 (${lastSyncedAt.value})`;
-        return { success: true, message: '成功从云端同步最新数据！' };
-      } else {
-        return { success: false, message: '云端返回数据结构不正确' };
-      }
-    } catch (e: any) {
+      lastSyncedAt.value = new Date().toLocaleTimeString('zh-CN', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      syncLog.value = `已从云端同步最新数据 (${lastSyncedAt.value})`;
+      return { success: true, message: '成功从云端同步最新数据！' };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      syncLog.value = `从云端拉取失败: ${message}`;
+      return { success: false, message: `拉取失败: ${message}` };
+    } finally {
       isSyncing.value = false;
-      syncLog.value = `从云端拉取失败: ${e.message || e}`;
-      return { success: false, message: `拉取失败: ${e.message || e}` };
     }
   }
 

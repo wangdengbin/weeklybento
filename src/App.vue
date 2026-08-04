@@ -1,7 +1,10 @@
 <template>
   <div id="app">
     <!-- 头部导航 & 管理员暗门 -->
-    <HeaderNav @open-admin-modal="showAdminModal = true" />
+    <HeaderNav
+      @open-admin-modal="showAdminModal = true"
+      @open-team-modal="showTeamModal = true"
+    />
 
     <!-- 主 View 视图 -->
     <main class="main-content">
@@ -27,6 +30,11 @@
     <AdminModal 
       :visible="showAdminModal" 
       @close="showAdminModal = false" 
+    />
+
+    <TeamWorkspaceModal
+      :visible="showTeamModal"
+      @close="showTeamModal = false"
     />
 
     <!-- 底部 H5 移动端 Sweet TabBar -->
@@ -74,23 +82,29 @@ import SlotMachine from './components/SlotMachine.vue';
 import HistoryView from './components/HistoryView.vue';
 import ResultModal from './components/ResultModal.vue';
 import AdminModal from './components/AdminModal.vue';
+import TeamWorkspaceModal from './components/TeamWorkspaceModal.vue';
 import { soundEffects } from './composables/useAudio';
 import { useBentoStore } from './composables/useBentoStore';
-import { useCloudSync } from './composables/useCloudSync';
+import { useTeamWorkspace } from './composables/useTeamWorkspace';
 import type { BentoLocation } from './types';
 
 const currentTab = ref<'roll' | 'history'>('roll');
 const showResultModal = ref(false);
 const showAdminModal = ref(false);
+const showTeamModal = ref(false);
 
 const { settings } = useBentoStore();
-const { pullFromCloud } = useCloudSync();
+const { team, initialize } = useTeamWorkspace();
 
 const latestResult = ref<{ location: BentoLocation; fortune: string } | null>(null);
 
 // 应用启动时自动从云端获取最新数据
-onMounted(() => {
-  pullFromCloud(true);
+onMounted(async () => {
+  await initialize();
+  if (team.value) settings.value.activeMode = 'team';
+  if (!team.value && new URL(window.location.href).searchParams.has('team')) {
+    showTeamModal.value = true;
+  }
 });
 
 function switchTab(tab: 'roll' | 'history') {

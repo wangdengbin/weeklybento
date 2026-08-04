@@ -35,7 +35,7 @@
           <span>打卡并记录为今日午餐</span>
         </button>
 
-        <button class="btn-secondary re-roll-btn" @click="handleReroll">
+        <button v-if="settings.activeMode === 'personal'" class="btn-secondary re-roll-btn" @click="handleReroll">
           <RefreshCw :size="18" />
           <span>不满意，再 Roll 一次</span>
         </button>
@@ -66,11 +66,11 @@ function handleConfirm() {
   if (settings.value.soundEnabled) soundEffects.playTick(900);
 
   // 1. 标记本轮已吃
-  markLocationAsDrawn(props.resultData.location.id);
+  if (settings.value.activeMode === 'personal') markLocationAsDrawn(props.resultData.location.id);
   // 2. 写入今日记录
   addDailyRecord(props.resultData.location);
   // 3. 即时推送更新至云数据库
-  pushToCloud(true);
+  if (settings.value.activeMode === 'personal') pushToCloud(true);
 
   emit('confirm-record');
   emit('close');

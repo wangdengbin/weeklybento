@@ -24,15 +24,29 @@ export interface DailyRecord {
 export interface CloudSyncConfig {
   enabled: boolean;
   provider: 'jsonbin' | 'supabase' | 'custom_api';
-  apiUrl: string; // e.g. https://api.jsonbin.io/v3/b/<BIN_ID> 或 Supabase REST URL
-  apiKey: string; // Master Key 或 Anon Key
+  apiUrl: string; // e.g. https://api.jsonbin.io/v3/b/<BIN_ID>
+  apiKey: string; // Master Key 或 Access Key
+  keyType?: 'auto' | 'master' | 'access';
   autoSync: boolean; // 是否自动变动同步
+}
+
+export interface TeamRollResult {
+  date: string; // YYYY-MM-DD
+  locationId: string;
+  locationName: string;
+  emoji: string;
+  tags: string[];
+  recommendedDish?: string;
+  priceRange?: string;
+  rolledAt: string; // HH:mm:ss
+  rolledBy?: string; // 摇号人标识
 }
 
 export interface AppSettings {
   adminPassword: string;
   antiRepeatMode: 'round' | 'none'; // 'round': 抽完为止自动/手动重置
   soundEnabled: boolean;
-  cloudSync?: CloudSyncConfig;
+  activeMode: 'personal' | 'team'; // 当前激活模式
+  personalSyncConfig?: CloudSyncConfig; // 个人云端同步设置
+  cloudSync?: CloudSyncConfig; // 兼容逻辑
 }
-

@@ -1,115 +1,216 @@
 <template>
   <div class="slot-machine-container">
-    <!-- 池子进度提示卡 -->
-    <div class="pool-status-card">
-      <div class="status-info">
-        <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
-        <span class="status-text">
-          待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
-        </span>
-      </div>
-      <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
-        <RotateCcw :size="13" />
-        重置池子 (已吃{{ drawnList.length }})
-      </button>
-    </div>
-
-    <!-- 主老虎机机器 Frame -->
-    <div class="machine-frame glass-card">
-      <div class="machine-header">
-        <Sparkles class="sparkle-icon" :size="18" />
-        <span>BENTO RANDOM ROLL</span>
-        <Sparkles class="sparkle-icon" :size="18" />
+    <!-- 团队模式：今日已有团队选定结果卡片 -->
+    <div v-if="hasTodayTeamResult && !forceShowMachine" class="team-result-card glass-card">
+      <div class="team-card-header">
+        <span class="team-badge">👥 团队协同模式</span>
+        <span class="team-status-tag">今日已选定</span>
       </div>
 
-      <!-- 栏目标题 Row -->
-      <div class="reels-header-row">
-        <div class="column-title">类型/口味</div>
-        <div class="column-title main-title">今日午餐地</div>
-        <div class="column-title">吃货运势</div>
-      </div>
-
-      <!-- 老虎机 Display 窗口 (纯 3D 滚轮) -->
-      <div class="display-window">
-        <!-- 渐变阴影遮罩 (顶部与底部) -->
-        <div class="window-overlay"></div>
-
-        <!-- 中奖高亮指示线框 -->
-        <div class="target-highlight-bar">
-          <span class="pointer-arrow left">▶</span>
-          <span class="pointer-arrow right">◀</span>
+      <div class="team-card-body">
+        <div class="big-emoji-wrap">{{ todayTeamResult?.emoji }}</div>
+        <h2 class="team-location-title">{{ todayTeamResult?.locationName }}</h2>
+        
+        <div class="tags-row" v-if="todayTeamResult?.tags?.length">
+          <span v-for="tag in todayTeamResult.tags" :key="tag" class="tag-pill"># {{ tag }}</span>
+          <span class="price-tag" v-if="todayTeamResult?.priceRange">{{ todayTeamResult.priceRange }}</span>
         </div>
 
-        <!-- 3D 滚动槽 1: 标签/氛围 -->
-        <div class="reel-column">
-          <div class="reel-viewport">
-            <div class="reel-strip" :style="{ transform: `translateY(-${reel1Offset}px)`, transition: reelTransition }">
-              <div v-for="(item, idx) in reel1Items" :key="idx" class="reel-item">
-                <span class="reel-tag">{{ item }}</span>
-              </div>
-            </div>
-          </div>
+        <div class="recommend-box" v-if="todayTeamResult?.recommendedDish">
+          <span class="box-label">💡 推荐菜品：</span>
+          <span class="box-text">{{ todayTeamResult.recommendedDish }}</span>
         </div>
 
-        <!-- 3D 滚动槽 2: 地点与 Emoji (核心) -->
-        <div class="reel-column main-reel">
-          <div class="reel-viewport">
-            <div class="reel-strip" :style="{ transform: `translateY(-${reel2Offset}px)`, transition: reelTransition }">
-              <div v-for="(loc, idx) in reel2Items" :key="idx" class="reel-item loc-item">
-                <span class="item-emoji">{{ loc.emoji }}</span>
-                <span class="item-name">{{ loc.name }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3D 滚动槽 3: 运势判词 -->
-        <div class="reel-column">
-          <div class="reel-viewport">
-            <div class="reel-strip" :style="{ transform: `translateY(-${reel3Offset}px)`, transition: reelTransition }">
-              <div v-for="(word, idx) in reel3Items" :key="idx" class="reel-item">
-                <span class="reel-fortune">{{ word }}</span>
-              </div>
-            </div>
-          </div>
+        <div class="team-meta-info">
+          ⏰ 抽取时间：{{ todayTeamResult?.rolledAt }} · {{ todayTeamResult?.rolledBy || '团队成员' }} 已锁定今日菜单
         </div>
       </div>
 
-      <!-- 摇杆/启动按钮区 -->
-      <div class="action-bar">
-        <button 
-          class="btn-primary roll-btn" 
-          :disabled="isRolling || isPoolEmpty" 
-          @click="startRoll"
-        >
-          <div class="btn-inner">
-            <Dice5 v-if="!isRolling" :size="24" class="btn-icon" />
-            <RefreshCw v-else :size="24" class="btn-icon spin-icon" />
-            <span class="btn-text">{{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : '帮我选午餐！(ROLL)') }}</span>
-          </div>
+      <div class="team-card-actions">
+        <button class="btn-primary" @click="handleRecordTeamResult">
+          <Check :size="18" />
+          <span>记录为我的今日日志</span>
         </button>
-
-        <p class="anti-repeat-tip">
-          ✨ 不重复机制生效中：抽中地点自动移出本轮待抽池
-        </p>
+        <button v-if="canManageTeam" class="btn-secondary" @click="handleRerollTeamResult">
+          <RotateCcw :size="18" />
+          <span>重新选定 (重抽并同步团队)</span>
+        </button>
       </div>
     </div>
+
+    <template v-else>
+      <!-- 池子进度提示卡 -->
+      <div class="pool-status-card">
+        <div class="status-info">
+          <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
+          <span class="status-text">
+            <template v-if="settings.activeMode === 'team'">[👥 团队待抽池] </template>
+            待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
+          </span>
+        </div>
+        <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
+          <RotateCcw :size="13" />
+          重置池子 (已吃{{ drawnList.length }})
+        </button>
+      </div>
+
+      <!-- 主老虎机机器 Frame -->
+      <div class="machine-frame glass-card">
+        <div class="machine-header">
+          <Sparkles class="sparkle-icon" :size="18" />
+          <span>{{ settings.activeMode === 'team' ? 'TEAM RANDOM ROLL' : 'BENTO RANDOM ROLL' }}</span>
+          <Sparkles class="sparkle-icon" :size="18" />
+        </div>
+
+        <!-- 栏目标题 Row -->
+        <div class="reels-header-row">
+          <div class="column-title">类型/口味</div>
+          <div class="column-title main-title">今日午餐地</div>
+          <div class="column-title">吃货运势</div>
+        </div>
+
+        <!-- 老虎机 Display 窗口 (纯 3D 滚轮) -->
+        <div class="display-window">
+          <!-- 渐变阴影遮罩 (顶部与底部) -->
+          <div class="window-overlay"></div>
+
+          <!-- 中奖高亮指示线框 -->
+          <div class="target-highlight-bar">
+            <span class="pointer-arrow left">▶</span>
+            <span class="pointer-arrow right">◀</span>
+          </div>
+
+          <!-- 3D 滚动槽 1: 标签/氛围 -->
+          <div class="reel-column">
+            <div class="reel-viewport">
+              <div class="reel-strip" :style="{ transform: `translateY(-${reel1Offset}px)`, transition: reelTransition }">
+                <div v-for="(item, idx) in reel1Items" :key="idx" class="reel-item">
+                  <span class="reel-tag">{{ item }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3D 滚动槽 2: 地点与 Emoji (核心) -->
+          <div class="reel-column main-reel">
+            <div class="reel-viewport">
+              <div class="reel-strip" :style="{ transform: `translateY(-${reel2Offset}px)`, transition: reelTransition }">
+                <div v-for="(loc, idx) in reel2Items" :key="idx" class="reel-item loc-item">
+                  <span class="item-emoji">{{ loc.emoji }}</span>
+                  <span class="item-name">{{ loc.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3D 滚动槽 3: 运势判词 -->
+          <div class="reel-column">
+            <div class="reel-viewport">
+              <div class="reel-strip" :style="{ transform: `translateY(-${reel3Offset}px)`, transition: reelTransition }">
+                <div v-for="(word, idx) in reel3Items" :key="idx" class="reel-item">
+                  <span class="reel-fortune">{{ word }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 摇杆/启动按钮区 -->
+        <div class="action-bar">
+          <button 
+            class="btn-primary roll-btn" 
+            :disabled="isRolling || isPoolEmpty" 
+            @click="startRoll"
+          >
+            <div class="btn-inner">
+              <Dice5 v-if="!isRolling" :size="24" class="btn-icon" />
+              <RefreshCw v-else :size="24" class="btn-icon spin-icon" />
+              <span class="btn-text">
+                {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮团队选午餐！(ROLL)' : '帮我选午餐！(ROLL)')) }}
+              </span>
+            </div>
+          </button>
+
+          <p class="anti-repeat-tip">
+            ✨ {{ settings.activeMode === 'team' ? '团队模式协同：任何人完成 Roll 后全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
+          </p>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Sparkles, Dice5, RefreshCw, RotateCcw } from 'lucide-vue-next';
+import { ref, computed } from 'vue';
+import { Sparkles, Dice5, RefreshCw, RotateCcw, Check } from 'lucide-vue-next';
 import confetti from 'canvas-confetti';
 import { useBentoStore } from '../composables/useBentoStore';
+import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { soundEffects } from '../composables/useAudio';
 import type { BentoLocation } from '../types';
 
 const emit = defineEmits(['roll-complete']);
 
-const { locations, availablePool, drawnList, isPoolEmpty, getRandomLocation, resetPool, settings } = useBentoStore();
+const {
+  locations: personalLocations,
+  availablePool: personalAvailablePool,
+  drawnList: personalDrawnList,
+  getRandomLocation,
+  resetPool,
+  settings,
+  addDailyRecord,
+} = useBentoStore();
+const {
+  locations: teamLocations,
+  todayResult: teamTodayResult,
+  canManage: canManageTeam,
+  roll: rollTeam,
+} = useTeamWorkspace();
+
+const locations = computed(() => settings.value.activeMode === 'team' ? teamLocations.value : personalLocations.value);
+const availablePool = computed(() => settings.value.activeMode === 'team' ? teamLocations.value : personalAvailablePool.value);
+const drawnList = computed(() => settings.value.activeMode === 'team' ? [] : personalDrawnList.value);
+const isPoolEmpty = computed(() => availablePool.value.length === 0);
+const todayTeamResult = computed(() => teamTodayResult.value);
 
 const isRolling = ref(false);
+const forceShowMachine = ref(false);
+
+const todayStr = computed(() => new Date().toISOString().slice(0, 10));
+
+const hasTodayTeamResult = computed(() => {
+  return settings.value.activeMode === 'team' &&
+    !!todayTeamResult.value &&
+    todayTeamResult.value.date === todayStr.value;
+});
+
+function handleRecordTeamResult() {
+  if (!todayTeamResult.value) return;
+  const targetLoc = locations.value.find(l => l.id === todayTeamResult.value?.locationId);
+  if (targetLoc) {
+    addDailyRecord(targetLoc);
+  } else {
+    addDailyRecord({
+      id: todayTeamResult.value.locationId,
+      name: todayTeamResult.value.locationName,
+      emoji: todayTeamResult.value.emoji,
+      tags: todayTeamResult.value.tags,
+      priceRange: todayTeamResult.value.priceRange || '￥20-30',
+      weight: 1,
+      isDrawn: true,
+      createdAt: Date.now(),
+    });
+  }
+  if (settings.value.soundEnabled) soundEffects.playTick(900);
+  alert('已将今日团队选定菜单记录至您的个人日志！');
+}
+
+function handleRerollTeamResult() {
+  if (settings.value.soundEnabled) soundEffects.playTick(700);
+  if (confirm('确定重新抽取并重置团队选定菜单吗？')) {
+    forceShowMachine.value = true;
+  }
+}
 
 const FORTUNE_WORDS = [
   '绝不反悔！', '加个汉堡！', '香到迷糊！', '老板加个蛋！', 
@@ -152,10 +253,34 @@ function prepareReels() {
   reel3Items.value = repeatedFortunes;
 }
 
-function startRoll() {
+async function startRoll() {
   if (isRolling.value) return;
 
-  const targetLoc = getRandomLocation();
+  let targetLoc: BentoLocation | null = null;
+  if (settings.value.activeMode === 'team') {
+    const shouldForce = forceShowMachine.value;
+    forceShowMachine.value = true;
+    try {
+      const result = await rollTeam(shouldForce);
+      targetLoc = teamLocations.value.find(item => item.id === result.locationId) || {
+        id: result.locationId,
+        name: result.locationName,
+        emoji: result.emoji,
+        tags: result.tags,
+        priceRange: result.priceRange || '',
+        recommendedDish: result.recommendedDish,
+        weight: 1,
+        isDrawn: false,
+        createdAt: Date.now(),
+      };
+    } catch (error) {
+      forceShowMachine.value = false;
+      alert(error instanceof Error ? error.message : '团队抽签失败');
+      return;
+    }
+  } else {
+    targetLoc = getRandomLocation();
+  }
   if (!targetLoc) return;
 
   isRolling.value = true;
@@ -198,6 +323,7 @@ function startRoll() {
   // 动画结束 (2.5s)
   setTimeout(() => {
     isRolling.value = false;
+    if (settings.value.activeMode === 'team') forceShowMachine.value = false;
     if (audioTimer) clearTimeout(audioTimer);
 
     if (settings.value.soundEnabled) {
@@ -496,5 +622,116 @@ function handleResetPool() {
   color: var(--text-muted);
   text-align: center;
 }
-</style>
 
+/* 团队选定卡片样式 */
+.team-result-card {
+  padding: 24px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 2px solid rgba(255, 107, 53, 0.25);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(255, 107, 53, 0.12);
+}
+
+.team-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.team-badge {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.team-status-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #166534;
+  background: #DCFCE7;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.big-emoji-wrap {
+  font-size: 64px;
+  line-height: 1;
+  margin-top: 8px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.1));
+}
+
+.team-location-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tag-pill {
+  font-size: 0.75rem;
+  color: #64748B;
+  background: #F1F5F9;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.price-tag {
+  font-size: 0.75rem;
+  color: #EA580C;
+  background: #FFEDD5;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.recommend-box {
+  background: #FFF7ED;
+  border: 1px dashed #FDBA74;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: #9A3412;
+  width: 100%;
+}
+
+.team-meta-info {
+  font-size: 0.75rem;
+  color: #94A3B8;
+}
+
+.team-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.team-card-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+</style>
