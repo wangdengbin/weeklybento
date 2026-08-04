@@ -609,16 +609,19 @@ async function confirmDelete(id: string) {
 .food-line {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 
 .food-emoji {
   font-size: 1.2rem;
+  white-space: nowrap;
 }
 
 .food-name {
   font-size: 1.05rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .food-note {
@@ -809,6 +812,7 @@ async function confirmDelete(id: string) {
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 6px;
+  white-space: nowrap;
 }
 
 .status-tag.planned-tag {
@@ -828,6 +832,7 @@ async function confirmDelete(id: string) {
   background: #FFEDD5;
   padding: 2px 8px;
   border-radius: 10px;
+  white-space: nowrap;
 }
 
 .action-btn-text.confirm-btn {

@@ -848,18 +848,32 @@ function handleResetPool() {
   gap: 10px;
   width: 100%;
   margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .team-card-actions button {
   flex: 1;
+  min-width: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 12px;
+  padding: 12px 8px;
   border-radius: var(--radius-md);
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .team-card-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .team-card-actions button {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 /* 场景餐池 Selector */
