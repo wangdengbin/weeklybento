@@ -324,13 +324,24 @@ async function addOrUpdateTeamRecord(locationId: string, date: string, note?: st
   const currentUserId = sessionData.session?.user?.id;
   if (!currentUserId) throw new Error('身份校验失败');
 
-  const { error } = await supabase.from('team_draws').upsert({
+  const payload: Record<string, any> = {
     team_id: team.value.id,
     location_id: locationId,
     business_date: date,
     drawn_by: currentUserId,
-    note: note || '团队补录记录',
-  }, { onConflict: 'team_id,business_date' });
+  };
+  if (note && note.trim()) {
+    payload.note = note.trim();
+  }
+
+  let { error } = await supabase.from('team_draws').upsert(payload, { onConflict: 'team_id,business_date' });
+
+  // 如果 Supabase 后台数据库尚未增加 note 列导致 schema cache 报错，自动降级移除 note 重试
+  if (error && (error.message.includes("Could not find the 'note' column") || error.message.includes("schema cache"))) {
+    delete payload.note;
+    const retry = await supabase.from('team_draws').upsert(payload, { onConflict: 'team_id,business_date' });
+    error = retry.error;
+  }
 
   if (error) throw error;
   await loadWorkspace();
