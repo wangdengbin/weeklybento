@@ -81,7 +81,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
 
 `anon key` 可以出现在前端构建产物中；不要在前端使用 `service_role key`。实际数据权限由 `schema.sql` 中的 RLS 策略控制。
 
-团队邀请链接包含团队 ID 和可轮换的邀请码。用户首次打开链接后会建立匿名 Supabase 会话、加入团队，并从地址栏移除邀请码。
+团队邀请链接包含团队 ID 和可轮换的邀请码。详细的后台用户活跃监控及数据统计 SQL 查询可参考 [Supabase 后台用户与数据监控指南](doc/SUPABASE_ADMIN_AND_USERS.md)。
 
 ---
 
@@ -95,7 +95,8 @@ WeeklyBento/
 ├── vite.config.ts              # Vite 构建配置
 ├── README.md                   # 项目使用与部署说明
 ├── doc/                        # 项目详细文档目录
-│   └── GAMEPLAY_AND_RULES.md   # 核心玩法规则与技术复盘文档
+│   ├── GAMEPLAY_AND_RULES.md   # 核心玩法规则与技术复盘文档
+│   └── SUPABASE_ADMIN_AND_USERS.md # Supabase 后台用户与数据监控指南
 ├── supabase/schema.sql         # 团队数据表、RLS、RPC 与 Realtime 配置
 └── src/
     ├── main.ts                 # Vue 3 入口
