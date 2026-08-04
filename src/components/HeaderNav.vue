@@ -29,10 +29,11 @@
             class="mode-item team-mode-item"
             :class="{ active: settings.activeMode === 'team' }"
             @click="selectTeamMode"
-            :title="settings.activeMode === 'team' ? '点击切换团队或管理邀请' : '切换至午餐搭子模式'"
+            :title="isAnonymous ? '使用搭子圈多人协同功能需要先注册/登录账号' : (settings.activeMode === 'team' ? '点击切换团队或管理邀请' : '切换至午餐搭子模式')"
           >
             👥 {{ displayTeamName }}
-            <ChevronDown v-if="settings.activeMode === 'team'" :size="13" class="team-arrow-icon" />
+            <span v-if="isAnonymous" class="login-tip-badge">🔒 需登录</span>
+            <ChevronDown v-else-if="settings.activeMode === 'team'" :size="13" class="team-arrow-icon" />
           </span>
         </div>
 
@@ -132,6 +133,11 @@ function selectPersonalMode() {
 }
 
 function selectTeamMode() {
+  if (isAnonymous.value) {
+    emit('open-team-modal');
+    if (settings.value.soundEnabled) soundEffects.playTick(600);
+    return;
+  }
   if (settings.value.activeMode === 'team') {
     emit('open-team-modal');
     if (settings.value.soundEnabled) soundEffects.playTick(600);
@@ -385,6 +391,17 @@ function openAdminModal() {
 
 .text-orange {
   color: var(--primary);
+}
+
+.login-tip-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: #FEE2E2;
+  color: #DC2626;
+  padding: 1px 5px;
+  border-radius: 6px;
+  border: 1px solid #FCA5A5;
+  margin-left: 3px;
 }
 
 .text-gray {
