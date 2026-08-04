@@ -6,6 +6,7 @@ export interface ParsedLocationItem {
   tags: string[];
   priceRange: string;
   recommendedDish?: string;
+  address?: string;
   weight: number;
   mealCategories?: MealCategory[];
 }
