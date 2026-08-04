@@ -875,4 +875,140 @@ async function confirmDelete(id: string) {
 .radio-item input {
   accent-color: #FF6B00;
 }
+
+/* 跨日提醒与看板头部 Flex 布局与导出按钮样式 */
+.expired-planned-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #FFFBEB;
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.banner-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #92400E;
+}
+
+.text-orange {
+  color: #F59E0B;
+}
+
+.banner-btn.clear-btn {
+  background: #FEE2E2;
+  color: #DC2626;
+  border: 1px solid #FCA5A5;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.banner-btn.clear-btn:hover {
+  background: #FCA5A5;
+  color: #991B1B;
+}
+
+.dash-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.dash-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #1E293B;
+}
+
+.export-csv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: #FFFFFF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.export-csv-btn:hover {
+  background: #EFF6FF;
+  border-color: #3B82F6;
+  transform: translateY(-1px);
+}
+
+.budget-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 8px;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+}
+
+.budget-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.budget-label {
+  color: #475569;
+}
+
+.budget-percent.normal-budget {
+  color: #10B981;
+}
+
+.budget-percent.warning-budget {
+  color: #F59E0B;
+}
+
+.budget-percent.over-budget {
+  color: #EF4444;
+}
+
+.budget-progress-bg {
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.budget-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.budget-progress-fill.normal-budget {
+  background: #10B981;
+}
+
+.budget-progress-fill.warning-budget {
+  background: #F59E0B;
+}
+
+.budget-progress-fill.over-budget {
+  background: #EF4444;
+}
 </style>
