@@ -3,11 +3,14 @@
     <div class="history-header">
       <div class="header-title">
         <Calendar :size="20" class="text-orange" />
-        <span>每日午餐记录</span>
+        <span>{{ isTeamMode ? `${team?.name || '团队'} 每日抽签记录` : '每日午餐记录' }}</span>
+        <span class="mode-badge" :class="isTeamMode ? 'team-badge' : 'personal-badge'">
+          {{ isTeamMode ? '👥 团队全员同步' : '🏠 个人记录' }}
+        </span>
       </div>
 
       <!-- 管理员补录历史记录按钮 -->
-      <button v-if="isAdminLoggedIn" class="btn-secondary add-rec-btn" @click="openAddModal">
+      <button v-if="!isTeamMode && isAdminLoggedIn" class="btn-secondary add-rec-btn" @click="openAddModal">
         <Plus :size="16" />
         <span>补录记录</span>
       </button>
@@ -16,7 +19,7 @@
     <!-- 列表展示 -->
     <div v-if="records.length === 0" class="empty-state glass-card">
       <UtensilsCrossed :size="48" class="empty-icon" />
-      <p class="empty-text">尚无午餐记录，快去 Roll 一个吧！</p>
+      <p class="empty-text">{{ isTeamMode ? '团队暂无选餐记录，大家快去 Roll 一个吧！' : '尚无午餐记录，快去 Roll 一个吧！' }}</p>
     </div>
 
     <div v-else class="records-list">
@@ -41,8 +44,8 @@
           </div>
         </div>
 
-        <!-- 管理员编辑/删除操作区 -->
-        <div v-if="isAdminLoggedIn" class="admin-actions">
+        <!-- 个人模式管理员操作 -->
+        <div v-if="!isTeamMode && isAdminLoggedIn" class="admin-actions">
           <button class="action-btn edit-btn" @click="openEditModal(rec)" title="管理员修改记录">
             <Edit3 :size="16" />
           </button>
@@ -89,15 +92,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Calendar, Plus, UtensilsCrossed, Edit3, Trash2 } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
+import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useAdmin } from '../composables/useAdmin';
 import { soundEffects } from '../composables/useAudio';
 import type { DailyRecord } from '../types';
 
-const { records, locations, updateRecord, deleteRecord, addDailyRecord, settings } = useBentoStore();
+const { records: personalRecords, locations, updateRecord, deleteRecord, addDailyRecord, settings } = useBentoStore();
+const { team, history: teamHistory } = useTeamWorkspace();
 const { isAdminLoggedIn } = useAdmin();
+
+const isTeamMode = computed(() => settings.value.activeMode === 'team' && Boolean(team.value));
+const records = computed(() => isTeamMode.value ? teamHistory.value : personalRecords.value);
 
 const showModal = ref(false);
 const isEditing = ref(false);
@@ -218,6 +226,26 @@ function confirmDelete(id: string) {
 
 .text-orange {
   color: var(--primary);
+}
+
+.mode-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.team-badge {
+  background: #FFF7ED;
+  color: #EA580C;
+  border: 1px solid #FFEDD5;
+}
+
+.personal-badge {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #E2E8F0;
 }
 
 .add-rec-btn {

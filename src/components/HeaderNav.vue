@@ -1,66 +1,80 @@
 <template>
   <header class="header-container">
-    <div class="brand-area" @click="handleLogoClick">
-      <div class="logo-box">
-        <span class="logo-emoji">🍱</span>
-      </div>
-      <div class="title-box">
-        <div class="app-title">
-          <span class="shine-text">周周便当</span>
-          <span class="version-badge">v1.1</span>
+    <div class="header-main-row">
+      <div class="brand-area" @click="handleLogoClick">
+        <div class="logo-box">
+          <span class="logo-emoji">🍱</span>
         </div>
-        <div class="sub-title">吃什么不纠结 · 随机 Roll 午餐</div>
+        <div class="title-box">
+          <div class="app-title">
+            <span class="shine-text">周周便当</span>
+            <span class="version-badge">v1.1</span>
+          </div>
+          <div class="sub-title">吃什么不纠结 · 随机 Roll 午餐</div>
+        </div>
+      </div>
+
+      <div class="actions-area">
+        <!-- 桌面端内嵌 模式切换胶囊 -->
+        <div 
+          class="mode-toggle-pill desktop-mode-pill" 
+          @click="toggleMode" 
+          :title="settings.activeMode === 'personal' ? '切换至团队共享模式' : '切换至个人独享模式'"
+        >
+          <span class="mode-item" :class="{ active: settings.activeMode === 'personal' }">🏠 个人</span>
+          <span class="mode-item" :class="{ active: settings.activeMode === 'team' }">👥 团队</span>
+        </div>
+
+        <!-- 账号登录/身份 状态按钮 -->
+        <button 
+          class="icon-btn auth-btn" 
+          :class="{ 'is-logged': !isAnonymous }"
+          @click="emit('open-auth-modal')"
+          :title="isAnonymous ? '当前为游客身份，点击注册/登录绑定账号' : `已登录：${userEmail}`"
+        >
+          <UserCheck v-if="!isAnonymous" :size="18" class="text-green" />
+          <User v-else :size="18" />
+        </button>
+
+        <!-- 静音/音效切换按钮 -->
+        <button class="icon-btn" @click="toggleSound" :title="settings.soundEnabled ? '关闭音效' : '开启音效'">
+          <Volume2 v-if="settings.soundEnabled" :size="20" class="text-orange" />
+          <VolumeX v-else :size="20" class="text-gray" />
+        </button>
+
+        <button
+          v-if="settings.activeMode === 'team' && team"
+          class="icon-btn"
+          type="button"
+          title="团队与邀请"
+          @click="emit('open-team-modal')"
+        >
+          <Share2 :size="18" />
+        </button>
+
+        <!-- 管理员暗门 / 状态 -->
+        <button 
+          class="icon-btn admin-btn" 
+          :class="{ 'is-admin': isAdminLoggedIn }"
+          @click="openAdminModal"
+          title="管理员面板 (长按或点击)"
+        >
+          <ShieldCheck v-if="isAdminLoggedIn" :size="20" class="admin-active-icon" />
+          <Lock v-else :size="18" />
+        </button>
       </div>
     </div>
 
-    <div class="actions-area">
-      <!-- 个人/团队 模式快速切换 Pill Badge -->
+    <!-- 移动端独立第二行：宽体居中模式切换 segmented pill -->
+    <div class="mobile-mode-row">
       <div 
-        class="mode-toggle-pill" 
+        class="mode-toggle-pill mobile-mode-pill" 
         @click="toggleMode" 
         :title="settings.activeMode === 'personal' ? '切换至团队共享模式' : '切换至个人独享模式'"
       >
-        <span class="mode-item" :class="{ active: settings.activeMode === 'personal' }">🏠 个人</span>
-        <span class="mode-item" :class="{ active: settings.activeMode === 'team' }">👥 团队</span>
+        <span class="mode-item" :class="{ active: settings.activeMode === 'personal' }">🏠 个人独享</span>
+        <span class="mode-item" :class="{ active: settings.activeMode === 'team' }">👥 团队协同</span>
       </div>
-
-      <!-- 账号登录/身份 状态按钮 -->
-      <button 
-        class="icon-btn auth-btn" 
-        :class="{ 'is-logged': !isAnonymous }"
-        @click="emit('open-auth-modal')"
-        :title="isAnonymous ? '当前为游客身份，点击注册/登录绑定账号' : `已登录：${userEmail}`"
-      >
-        <UserCheck v-if="!isAnonymous" :size="18" class="text-green" />
-        <User v-else :size="18" />
-      </button>
-
-      <!-- 静音/音效切换按钮 -->
-      <button class="icon-btn" @click="toggleSound" :title="settings.soundEnabled ? '关闭音效' : '开启音效'">
-        <Volume2 v-if="settings.soundEnabled" :size="20" class="text-orange" />
-        <VolumeX v-else :size="20" class="text-gray" />
-      </button>
-
-      <button
-        v-if="settings.activeMode === 'team' && team"
-        class="icon-btn"
-        type="button"
-        title="团队与邀请"
-        @click="emit('open-team-modal')"
-      >
-        <Share2 :size="18" />
-      </button>
-
-      <!-- 管理员暗门 / 状态 -->
-      <button 
-        class="icon-btn admin-btn" 
-        :class="{ 'is-admin': isAdminLoggedIn }"
-        @click="openAdminModal"
-        title="管理员面板 (长按或点击)"
-      >
-        <ShieldCheck v-if="isAdminLoggedIn" :size="20" class="admin-active-icon" />
-        <Lock v-else :size="18" />
-      </button>
     </div>
   </header>
 </template>
@@ -124,16 +138,23 @@ function openAdminModal() {
 <style scoped>
 .header-container {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.8);
+  flex-direction: column;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.9);
   position: sticky;
   top: 0;
   z-index: 40;
-  gap: 12px;
+  gap: 6px;
+}
+
+.header-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 10px;
 }
 
 .brand-area {
@@ -142,13 +163,13 @@ function openAdminModal() {
   gap: 10px;
   cursor: pointer;
   min-width: 0;
-  flex-shrink: 1;
+  flex-shrink: 0;
 }
 
 .logo-box {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
   display: flex;
   align-items: center;
@@ -164,7 +185,7 @@ function openAdminModal() {
 }
 
 .logo-emoji {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .title-box {
@@ -190,15 +211,14 @@ function openAdminModal() {
   color: var(--primary);
   border-radius: 8px;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .sub-title {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
   font-weight: 500;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .actions-area {
@@ -283,6 +303,31 @@ function openAdminModal() {
 
 .mode-toggle-pill:active {
   transform: scale(0.96);
+}
+
+.mobile-mode-row {
+  display: none;
+  width: 100%;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+/* 响应式断点：当窗口宽度小于等于 580px 时分层显示 */
+@media (max-width: 580px) {
+  .desktop-mode-pill {
+    display: none !important;
+  }
+  .mobile-mode-row {
+    display: flex;
+  }
+  .mobile-mode-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .mobile-mode-pill .mode-item {
+    flex: 1;
+    text-align: center;
+  }
 }
 
 .auth-btn.is-logged {

@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import type { BentoLocation, TeamRollResult } from '../types';
+import type { BentoLocation, DailyRecord, TeamRollResult } from '../types';
 
 type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -15,6 +15,7 @@ interface TeamWorkspace {
 const team = ref<TeamWorkspace | null>(null);
 const locations = ref<BentoLocation[]>([]);
 const todayResult = ref<TeamRollResult | null>(null);
+const teamHistory = ref<DailyRecord[]>([]);
 const isLoading = ref(false);
 const errorMessage = ref('');
 const pendingInviteUrl = ref('');
@@ -52,26 +53,56 @@ async function ensureAnonymousSession() {
 
 async function loadWorkspace() {
   if (!supabase || !team.value) return;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentUserId = sessionData.session?.user?.id;
+
   const [{ data: locationRows, error: locationError }, { data: drawRows, error: drawError }] = await Promise.all([
     supabase.from('team_locations').select('*').eq('team_id', team.value.id).order('created_at'),
-    supabase.from('team_draws').select('*').eq('team_id', team.value.id).eq('business_date', today()).limit(1),
+    supabase.from('team_draws').select('*, team_locations(*)').eq('team_id', team.value.id).order('business_date', { ascending: false }),
   ]);
   if (locationError) throw locationError;
   if (drawError) throw drawError;
+
   locations.value = (locationRows || []).map(mapLocation);
-  const draw = drawRows?.[0];
-  const location = draw ? locations.value.find(item => item.id === draw.location_id) : null;
-  todayResult.value = draw && location ? {
-    date: draw.business_date,
-    locationId: location.id,
-    locationName: location.name,
-    emoji: location.emoji,
-    tags: location.tags,
-    priceRange: location.priceRange,
-    recommendedDish: location.recommendedDish,
-    rolledAt: new Date(draw.drawn_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-    rolledBy: '团队成员',
-  } : null;
+
+  teamHistory.value = (drawRows || []).map((draw: any) => {
+    const locRow = draw.team_locations;
+    const loc = locRow ? mapLocation(locRow) : locations.value.find(item => item.id === draw.location_id);
+    const isMe = draw.drawn_by === currentUserId;
+    return {
+      id: draw.id,
+      date: draw.business_date,
+      locationId: draw.location_id,
+      locationName: loc?.name || '团队用餐',
+      emoji: loc?.emoji || '🍱',
+      tags: loc?.tags || [],
+      priceRange: loc?.priceRange || '',
+      recommendedDish: loc?.recommendedDish || '',
+      note: isMe ? '团队协同 Roll (由我选定)' : '团队协同 Roll (团队成员选定)',
+      drawnAt: new Date(draw.drawn_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    };
+  });
+
+  const todayStr = today();
+  const todayDraw = (drawRows || []).find((d: any) => d.business_date === todayStr);
+  if (todayDraw) {
+    const locRow = todayDraw.team_locations;
+    const location = locRow ? mapLocation(locRow) : locations.value.find(item => item.id === todayDraw.location_id);
+    const isMe = todayDraw.drawn_by === currentUserId;
+    todayResult.value = location ? {
+      date: todayDraw.business_date,
+      locationId: location.id,
+      locationName: location.name,
+      emoji: location.emoji,
+      tags: location.tags,
+      priceRange: location.priceRange,
+      recommendedDish: location.recommendedDish,
+      rolledAt: new Date(todayDraw.drawn_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      rolledBy: isMe ? '我' : '团队成员',
+    } : null;
+  } else {
+    todayResult.value = null;
+  }
 }
 
 function startRealtime() {
@@ -233,7 +264,62 @@ async function batchAddLocations(values: Omit<BentoLocation, 'id' | 'isDrawn' | 
   await loadWorkspace();
 }
 
+function clearActiveTeamState() {
+  team.value = null;
+  locations.value = [];
+  todayResult.value = null;
+  if (channel) {
+    supabase?.removeChannel(channel);
+    channel = null;
+  }
+  localStorage.removeItem('weekly_bento_active_team');
+  const url = new URL(window.location.href);
+  url.searchParams.delete('team');
+  window.history.replaceState({}, '', url);
+}
+
+async function leaveTeam() {
+  if (!supabase || !team.value) return;
+  isLoading.value = true;
+  errorMessage.value = '';
+  try {
+    const teamId = team.value.id;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
+    if (!userId) throw new Error('身份校验失败');
+
+    const { error } = await supabase.from('team_members').delete().eq('team_id', teamId).eq('user_id', userId);
+    if (error) throw error;
+
+    clearActiveTeamState();
+  } catch (e: any) {
+    errorMessage.value = getErrorMessage(e);
+    throw e;
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function deleteTeam() {
+  if (!supabase || !team.value) return;
+  isLoading.value = true;
+  errorMessage.value = '';
+  try {
+    const teamId = team.value.id;
+    const { error } = await supabase.from('teams').delete().eq('id', teamId);
+    if (error) throw error;
+
+    clearActiveTeamState();
+  } catch (e: any) {
+    errorMessage.value = getErrorMessage(e);
+    throw e;
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 const canManage = computed(() => team.value?.role === 'owner' || team.value?.role === 'admin');
+const isOwner = computed(() => team.value?.role === 'owner');
 
 export function useTeamWorkspace() {
   return {
@@ -241,10 +327,12 @@ export function useTeamWorkspace() {
     team,
     locations,
     todayResult,
+    history: teamHistory,
     isLoading,
     errorMessage,
     pendingInviteUrl,
     canManage,
+    isOwner,
     initialize,
     openTeam,
     createTeam,
@@ -255,6 +343,8 @@ export function useTeamWorkspace() {
     updateLocation,
     deleteLocation,
     batchDeleteLocations,
+    leaveTeam,
+    deleteTeam,
     refresh: loadWorkspace,
   };
 }

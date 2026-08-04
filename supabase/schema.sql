@@ -64,7 +64,14 @@ alter table public.team_locations enable row level security;
 alter table public.team_draws enable row level security;
 
 create policy "members read teams" on public.teams for select using (public.is_team_member(id));
+create policy "owners delete teams" on public.teams for delete using (
+  exists (
+    select 1 from team_members
+    where team_id = id and user_id = auth.uid() and role = 'owner'
+  )
+);
 create policy "members read memberships" on public.team_members for select using (public.is_team_member(team_id));
+create policy "members delete self membership" on public.team_members for delete using (user_id = auth.uid());
 create policy "members read locations" on public.team_locations for select using (public.is_team_member(team_id));
 create policy "admins insert locations" on public.team_locations for insert with check (public.can_manage_team(team_id));
 create policy "admins update locations" on public.team_locations for update using (public.can_manage_team(team_id));

@@ -20,11 +20,21 @@
           </div>
         </div>
 
-        <button v-if="canManage" class="primary-action" type="button" :disabled="isLoading" @click="shareTeam">
-          <Share2 :size="18" />
-          {{ copied ? '邀请链接已复制' : '复制新的邀请链接' }}
-        </button>
-        <p v-else class="muted">只有团队管理员可以生成新的邀请链接。</p>
+        <div class="team-actions-group">
+          <button v-if="canManage" class="primary-action" type="button" :disabled="isLoading" @click="shareTeam">
+            <Share2 :size="18" />
+            {{ copied ? '邀请链接已复制' : '复制新的邀请链接' }}
+          </button>
+
+          <button v-if="isOwner" class="danger-action" type="button" :disabled="isLoading" @click="handleDeleteTeam">
+            <Trash2 :size="16" />
+            解散团队
+          </button>
+          <button v-else class="secondary-action" type="button" :disabled="isLoading" @click="handleLeaveTeam">
+            <LogOut :size="16" />
+            退出团队
+          </button>
+        </div>
       </template>
 
       <template v-else>
@@ -56,14 +66,15 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Database, Plus, Share2, Users, X } from 'lucide-vue-next';
+import { Database, Plus, Share2, Users, X, Trash2, LogOut } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
+import { soundEffects } from '../composables/useAudio';
 
 defineProps<{ visible: boolean }>();
 const emit = defineEmits(['close']);
 const { locations: personalLocations, switchMode } = useBentoStore();
-const { team, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl } = useTeamWorkspace();
+const { team, isConfigured, isLoading, errorMessage, canManage, isOwner, createTeam, createInviteUrl, deleteTeam, leaveTeam } = useTeamWorkspace();
 const teamName = ref('');
 const usePersonalMenu = ref(true);
 const copied = ref(false);
@@ -83,6 +94,28 @@ async function shareTeam() {
     await navigator.clipboard.writeText(url);
     copied.value = true;
     window.setTimeout(() => { copied.value = false; }, 2000);
+  }
+}
+
+async function handleDeleteTeam() {
+  if (!team.value) return;
+  if (confirm(`⚠️ 危险操作：确定要解散团队“${team.value.name}”吗？此操作将永久删除团队下所有菜单和抽签记录，不可恢复！`)) {
+    soundEffects.playTick(300);
+    await deleteTeam();
+    switchMode('personal');
+    alert('团队已成功解散！已自动返回个人模式。');
+    emit('close');
+  }
+}
+
+async function handleLeaveTeam() {
+  if (!team.value) return;
+  if (confirm(`确定要退出团队“${team.value.name}”吗？`)) {
+    soundEffects.playTick(400);
+    await leaveTeam();
+    switchMode('personal');
+    alert('已成功退出团队！已自动返回个人模式。');
+    emit('close');
   }
 }
 </script>
