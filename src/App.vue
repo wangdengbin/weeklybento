@@ -4,6 +4,7 @@
     <HeaderNav
       @open-admin-modal="showAdminModal = true"
       @open-team-modal="showTeamModal = true"
+      @open-auth-modal="showAuthModal = true"
     />
 
     <!-- 主 View 视图 -->
@@ -35,6 +36,11 @@
     <TeamWorkspaceModal
       :visible="showTeamModal"
       @close="showTeamModal = false"
+    />
+
+    <AuthModal
+      :visible="showAuthModal"
+      @close="showAuthModal = false"
     />
 
     <!-- 底部 H5 移动端 Sweet TabBar -->
@@ -83,6 +89,7 @@ import HistoryView from './components/HistoryView.vue';
 import ResultModal from './components/ResultModal.vue';
 import AdminModal from './components/AdminModal.vue';
 import TeamWorkspaceModal from './components/TeamWorkspaceModal.vue';
+import AuthModal from './components/AuthModal.vue';
 import { soundEffects } from './composables/useAudio';
 import { useBentoStore } from './composables/useBentoStore';
 import { useTeamWorkspace } from './composables/useTeamWorkspace';
@@ -92,6 +99,7 @@ const currentTab = ref<'roll' | 'history'>('roll');
 const showResultModal = ref(false);
 const showAdminModal = ref(false);
 const showTeamModal = ref(false);
+const showAuthModal = ref(false);
 
 const { settings } = useBentoStore();
 const { team, initialize } = useTeamWorkspace();

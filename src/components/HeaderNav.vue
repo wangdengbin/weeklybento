@@ -24,6 +24,17 @@
         <span class="mode-item" :class="{ active: settings.activeMode === 'team' }">👥 团队</span>
       </div>
 
+      <!-- 账号登录/身份 状态按钮 -->
+      <button 
+        class="icon-btn auth-btn" 
+        :class="{ 'is-logged': !isAnonymous }"
+        @click="emit('open-auth-modal')"
+        :title="isAnonymous ? '当前为游客身份，点击注册/登录绑定账号' : `已登录：${userEmail}`"
+      >
+        <UserCheck v-if="!isAnonymous" :size="18" class="text-green" />
+        <User v-else :size="18" />
+      </button>
+
       <!-- 静音/音效切换按钮 -->
       <button class="icon-btn" @click="toggleSound" :title="settings.soundEnabled ? '关闭音效' : '开启音效'">
         <Volume2 v-if="settings.soundEnabled" :size="20" class="text-orange" />
@@ -56,17 +67,19 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Volume2, VolumeX, ShieldCheck, Lock, Share2 } from 'lucide-vue-next';
+import { Volume2, VolumeX, ShieldCheck, Lock, Share2, User, UserCheck } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useAdmin } from '../composables/useAdmin';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
+import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
 
-const emit = defineEmits(['open-admin-modal', 'open-team-modal']);
+const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-modal']);
 
 const { settings, switchMode } = useBentoStore();
 const { isAdminLoggedIn } = useAdmin();
 const { team } = useTeamWorkspace();
+const { isAnonymous, userEmail } = useAuth();
 
 const clickCount = ref(0);
 let clickTimer: number | null = null;
@@ -270,6 +283,15 @@ function openAdminModal() {
 
 .mode-toggle-pill:active {
   transform: scale(0.96);
+}
+
+.auth-btn.is-logged {
+  background: #F0FDF4;
+  border-color: #86EFAC;
+}
+
+.text-green {
+  color: #166534;
 }
 
 .text-orange {
