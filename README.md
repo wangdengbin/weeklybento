@@ -18,9 +18,11 @@
   - 历史记录管理：日历查看与修改每日用餐打卡。
   - **安全隐蔽**：云端 Key 与 Endpoint 托管于 `.env` 环境变量，打包打包后直接带入，在管理员界面**禁止查看与修改明文密钥**。
 
+- 🌐 **在线访问体验**：[https://wangdengbin.github.io/weeklybento/](https://wangdengbin.github.io/weeklybento/)
+
 ---
 
-## 🛠️ 本地调试与打包命令
+## 🛠️ 本地调试与部署命令
 
 ### 1. 安装依赖
 ```bash
@@ -43,6 +45,24 @@ npm run build
 ```bash
 npm run preview
 ```
+
+### 5. 一键发布部署至 GitHub Pages
+```bash
+npm run deploy
+```
+该命令会自动构建项目，并直接把 `dist/` 产物推送到远程 `gh-pages` 分支完成在线发布。
+
+### 6. 发布 GitHub Releases 版本
+```bash
+# 1. 打上版本号标签 (例如 v1.0.0)
+git tag -a v1.0.0 -m "v1.0.0 首次正式版本发布"
+
+# 2. 将标签推送到远程仓库
+git push origin v1.0.0
+```
+推送完成后，打开 [https://github.com/wangdengbin/weeklybento/releases](https://github.com/wangdengbin/weeklybento/releases) 点击 **Draft a new release**，选择 `v1.0.0` 标签并填写更新说明即可发布 Release。
+
+
 
 ---
 
