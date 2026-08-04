@@ -44,6 +44,8 @@ export interface DailyRecord {
   drawnAt: string; // HH:mm:ss
   note?: string; // 备注/用餐心得
   cost?: number; // 实付金额 (仅个人模式生效)
+  address?: string; // 打卡时的历史地址快照
+  mapUrl?: string; // 打卡时的历史导航链接快照
 }
 
 export interface CloudSyncConfig {

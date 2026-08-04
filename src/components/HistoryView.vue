@@ -177,12 +177,8 @@
           </div>
 
           <div class="form-item">
-            <label>选择/输入地点：</label>
-            <select v-model="form.locationId" @change="onLocationSelectChange" required class="input-field">
-              <option v-for="loc in locations" :key="loc.id" :value="loc.id">
-                {{ loc.emoji }} {{ loc.name }}
-              </option>
-            </select>
+            <label>地点 / 餐品名称：</label>
+            <input type="text" v-model="form.locationName" placeholder="例如：萨莉亚 (或自定义名称)" required class="input-field" />
           </div>
 
           <!-- 个人模式：状态与花费金额 -->
@@ -434,14 +430,7 @@ function openEditModal(rec: DailyRecord) {
   showModal.value = true;
 }
 
-function onLocationSelectChange() {
-  const target = locations.value.find(l => l.id === form.value.locationId);
-  if (target) {
-    form.value.locationName = target.name;
-    form.value.emoji = target.emoji;
-    form.value.tags = target.tags || [];
-  }
-}
+
 
 async function saveRecord() {
   if (settings.value.soundEnabled) soundEffects.playTick(800);
