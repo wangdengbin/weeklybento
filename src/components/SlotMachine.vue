@@ -163,8 +163,13 @@ function startRoll() {
 
   prepareReels();
 
-  // 计算目标位置 (考虑到顶格显示1个非中奖项，目标项需要偏移索引 - 1，这样目标项刚好定格在中间的第2项)
-  const targetIndexInPool = reel2Items.value.findLastIndex(l => l.id === targetLoc.id);
+  let targetIndexInPool = -1;
+  for (let i = reel2Items.value.length - 1; i >= 0; i--) {
+    if (reel2Items.value[i].id === targetLoc.id) {
+      targetIndexInPool = i;
+      break;
+    }
+  }
   const targetReel2Index = (targetIndexInPool >= 1 ? targetIndexInPool : Math.floor(reel2Items.value.length / 2)) - 1;
 
   const targetReel1Index = Math.floor(Math.random() * (reel1Items.value.length - 10)) + 5;
