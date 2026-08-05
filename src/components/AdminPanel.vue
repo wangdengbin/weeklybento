@@ -151,33 +151,46 @@
         </div>
       </div>
 
-      <!-- 个人云端同步设置 (自定义 API Key / URL) -->
+      <!-- 个人云端同步 (Supabase) -->
       <div class="config-card glass-card">
         <h4 class="card-heading">
           <CloudCloud :size="16" />
-          <span>🏠 个人专属云端同步配置</span>
+          <span>☁️ 个人账单云端同步</span>
         </h4>
-        <p class="status-sub">可在此绑定您个人专属的 JSONBin API Key 与 Bin 地址，实现个人数据的云端同步与备份。</p>
-        
-        <form @submit.prevent="handleSavePersonalConfig" class="sync-config-form">
-          <div class="form-item">
-            <label>个人 JSONBin API Key：</label>
-            <input type="password" v-model="personalForm.apiKey" placeholder="示例: $2a$10$..." class="input-field" />
+        <p v-if="!isSupabaseConfigured" class="status-sub">尚未配置 Supabase（.env 缺少 URL/Key），个人数据仅保存在本机。</p>
+        <template v-else>
+          <div class="cloud-status-box">
+            <div class="status-indicator">
+              <span class="status-green-dot"></span>
+              <span class="status-title">Supabase 已连接</span>
+            </div>
+            <p class="status-sub">
+              当前账号：{{ isAnonymous ? '匿名（仅本设备可同步）' : (userEmail || '已登录') }}
+              <span v-if="isAnonymous"> · 建议先绑定邮箱，才能真正跨设备同步</span>
+            </p>
+            <p class="status-sub">同步策略：按记录合并、以较新版本为准，不会覆盖本地数据；删除也会跨设备生效。</p>
           </div>
-          <div class="form-item">
-            <label>个人 API URL (含 Bin ID)：</label>
-            <input type="text" v-model="personalForm.apiUrl" placeholder="示例: https://api.jsonbin.io/v3/b/6a71..." class="input-field" />
-          </div>
-          <div class="btn-row">
-            <button type="submit" class="btn-primary small-btn">保存个人云配置</button>
-            <button type="button" class="btn-secondary small-btn" :disabled="isSyncing" @click="handlePushPersonal">
-              <UploadCloud :size="14" /> 推送个人数据
+
+          <label class="auto-sync-toggle">
+            <input type="checkbox" :checked="autoSyncEnabled" @change="toggleAutoSync" />
+            <span>开启自动同步（数据变更后自动上传云端）</span>
+          </label>
+
+          <div class="cloud-btn-row">
+            <button class="btn-primary small-btn" :disabled="isSyncing" @click="handleSyncNow">
+              <CloudCloud :size="14" /> 立即同步
             </button>
-            <button type="button" class="btn-secondary small-btn" :disabled="isSyncing" @click="handlePullPersonal">
-              <DownloadCloud :size="14" /> 拉取个人数据
+            <button class="btn-secondary small-btn" :disabled="isSyncing" @click="handlePushPersonal">
+              <UploadCloud :size="14" /> 推送到云端
+            </button>
+            <button class="btn-secondary small-btn" :disabled="isSyncing" @click="handlePullPersonal">
+              <DownloadCloud :size="14" /> 从云端拉取
             </button>
           </div>
-        </form>
+
+          <div v-if="syncLog" class="sync-log-box">{{ syncLog }}</div>
+          <p v-if="lastSyncedAt" class="status-sub" style="margin-top: 6px;">上次同步：{{ lastSyncedAt }}</p>
+        </template>
       </div>
 
       <!-- Supabase 团队状态 -->
@@ -358,18 +371,21 @@ import {
 } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useAdmin } from '../composables/useAdmin';
+import { useAuth } from '../composables/useAuth';
 import { useCloudSync } from '../composables/useCloudSync';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { soundEffects } from '../composables/useAudio';
 import { parseBatchLocationsText } from '../utils/parseBatchText';
 import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const emit = defineEmits(['close']);
 
 
 const { locations: personalLocations, addLocation, batchAddLocations, updateLocation, deleteLocation, batchDeleteLocations: batchDeletePersonalLocations, resetPool, restoreDefaultLocations, exportDataJSON, importDataJSON, settings, updateEnabledMealCategories } = useBentoStore();
 const { logout, changePassword } = useAdmin();
-const { isSyncing, pushToCloud, pullFromCloud } = useCloudSync();
+const { isSyncing, syncLog, lastSyncedAt, pushToCloud, pullFromCloud } = useCloudSync();
+const { isAnonymous, userEmail } = useAuth();
 const {
   team,
   locations: teamLocations,
@@ -493,6 +509,7 @@ async function handleConfirmBatchImport() {
 
 function handleSaveBudget() {
   if (settings.value.soundEnabled) soundEffects.playTick(900);
+  settings.value.updatedAt = Date.now();
   pushToCloud(true);
   alert('成功更新个人月度伙食预算！');
 }
@@ -671,38 +688,32 @@ function handleUpdatePassword() {
   }
 }
 
-const personalForm = ref({
-  apiKey: settings.value.personalSyncConfig?.apiKey || '',
-  apiUrl: settings.value.personalSyncConfig?.apiUrl || '',
-});
+const autoSyncEnabled = computed(() => settings.value.personalSyncConfig?.autoSync === true);
 
-function handleSavePersonalConfig() {
+function toggleAutoSync() {
   if (!settings.value.personalSyncConfig) {
-    settings.value.personalSyncConfig = { enabled: true, provider: 'jsonbin', apiUrl: '', apiKey: '', autoSync: false };
+    settings.value.personalSyncConfig = { enabled: true, provider: 'supabase', apiUrl: '', apiKey: '', autoSync: false };
   }
-  settings.value.personalSyncConfig.apiKey = personalForm.value.apiKey.trim();
-  settings.value.personalSyncConfig.apiUrl = personalForm.value.apiUrl.trim();
-  alert('已成功保存个人云端配置！');
+  settings.value.personalSyncConfig.autoSync = !settings.value.personalSyncConfig.autoSync;
+  settings.value.updatedAt = Date.now();
+  if (settings.value.personalSyncConfig.autoSync) {
+    pushToCloud(true);
+  }
 }
 
 async function handlePushPersonal() {
-  handleSavePersonalConfig();
-  const res = await pushToCloud(false, {
-    apiKey: personalForm.value.apiKey.trim(),
-    apiUrl: personalForm.value.apiUrl.trim(),
-  });
+  const res = await pushToCloud(false);
   alert(res.message);
 }
 
 async function handlePullPersonal() {
-  handleSavePersonalConfig();
-  if (confirm('警告：从个人云端拉取将覆盖当前本地数据，是否继续？')) {
-    const res = await pullFromCloud(false, {
-      apiKey: personalForm.value.apiKey.trim(),
-      apiUrl: personalForm.value.apiUrl.trim(),
-    });
-    alert(res.message);
-  }
+  const res = await pullFromCloud(false);
+  alert(res.message);
+}
+
+async function handleSyncNow() {
+  const res = await pullFromCloud(false);
+  alert(res.message);
 }
 
 function handleImportFile(event: Event) {
@@ -1068,6 +1079,23 @@ function handleImportFile(event: Event) {
   border-radius: 6px;
 }
 
+.auto-sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+}
+
+.auto-sync-toggle input {
+  accent-color: #22C55E;
+  width: 16px;
+  height: 16px;
+}
+
 .cloud-btn-row, .backup-btn-row {
   display: flex;
   gap: 10px;
@@ -1357,4 +1385,3 @@ function handleImportFile(event: Event) {
   accent-color: #FF6B00;
 }
 </style>
-

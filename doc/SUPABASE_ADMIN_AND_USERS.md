@@ -23,6 +23,15 @@
 * **`team_locations` 表**：查看各团队录入的所有自定义地点、价格、推荐菜及权重。
 * **`team_draws` 表**：查看每天有哪些团队在选餐打卡（`drawn_by` 为选餐操作人 ID，`drawn_at` 为选餐时间）。
 
+### 个人模式云同步数据（`user_*` 表）
+
+执行 [`supabase/personal_sync.sql`](../supabase/personal_sync.sql) 后新增，按 `user_id` 隔离：
+
+* **`user_records` 表**：个人账单/打卡记录（`cost` 为实付金额，`updated_at_ms` 用于多设备冲突合并）。
+* **`user_locations` 表**：个人地点池（含是否已抽中、是否隐藏）。
+* **`user_settings` 表**：每用户一行的个人设置 jsonb。
+* **`user_deletions` 表**：删除墓碑，保证一台设备删除的记录不会在其他设备上复活。
+
 ---
 
 ## 💻 方法 2：在 SQL Editor 执行高效统计查询

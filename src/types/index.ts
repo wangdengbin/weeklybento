@@ -27,6 +27,7 @@ export interface BentoLocation {
   weight: number; // 权重
   isDrawn: boolean; // 在当前轮次中是否已被抽中
   createdAt: number;
+  updatedAt?: number; // 最后修改时间(ms)，用于云同步冲突合并
   mealCategories?: MealCategory[]; // 支持的餐池分类，不传默认全选/包含午餐
   address?: string; // 详细地址（如：“科技园路 88 号 2 楼”）
   mapUrl?: string; // 自定义导航跳转链接
@@ -53,6 +54,13 @@ export interface DailyRecord {
   cost?: number; // 实付金额 (仅个人模式生效)
   address?: string; // 打卡时的历史地址快照
   mapUrl?: string; // 打卡时的历史导航链接快照
+  updatedAt?: number; // 最后修改时间(ms)，用于云同步冲突合并
+}
+
+export interface SyncTombstone {
+  kind: 'record' | 'location';
+  id: string;
+  deletedAt: number; // 删除时间(ms)
 }
 
 export interface CloudSyncConfig {
@@ -87,4 +95,5 @@ export interface AppSettings {
   cloudSync?: CloudSyncConfig; // 兼容逻辑
   monthlyBudget?: number; // 月伙食预算 (0 或 undefined 表示未设置)
   enabledMealCategories?: MealCategory[]; // 开启展示的餐池分类列表
+  updatedAt?: number; // 设置最后修改时间(ms)，用于云同步冲突合并
 }

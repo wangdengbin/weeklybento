@@ -94,6 +94,7 @@ import AuthModal from './components/AuthModal.vue';
 import { soundEffects } from './composables/useAudio';
 import { useBentoStore } from './composables/useBentoStore';
 import { useTeamWorkspace } from './composables/useTeamWorkspace';
+import { useCloudSync } from './composables/useCloudSync';
 import type { BentoLocation } from './types';
 
 const currentTab = ref<'roll' | 'history'>('roll');
@@ -104,6 +105,7 @@ const showAuthModal = ref(false);
 
 const { settings } = useBentoStore();
 const { team, initialize } = useTeamWorkspace();
+const { initializePersonalSync } = useCloudSync();
 
 const latestResult = ref<{ location: BentoLocation; fortune: string } | null>(null);
 
@@ -114,6 +116,7 @@ const isInviteOrTeamLink = initialSearchParams.has('invite') || initialSearchPar
 // 应用启动时自动从云端获取最新数据
 onMounted(async () => {
   await initialize();
+  await initializePersonalSync();
 
   if (isInviteOrTeamLink) {
     if (team.value) {

@@ -153,6 +153,7 @@ function selectTeamMode() {
 
 function toggleSound() {
   settings.value.soundEnabled = !settings.value.soundEnabled;
+  settings.value.updatedAt = Date.now();
   if (settings.value.soundEnabled) {
     soundEffects.playTick(1000);
   }

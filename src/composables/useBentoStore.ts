@@ -1,9 +1,37 @@
 import { ref, computed, watch } from 'vue';
-import type { BentoLocation, DailyRecord, AppSettings, MealCategory, RecordStatus } from '../types';
+import type { AppSettings, BentoLocation, CloudSyncConfig, DailyRecord, MealCategory, RecordStatus, SyncTombstone } from '../types';
 
 const STORAGE_KEY_LOCATIONS = 'weekly_bento_locations_v3';
 const STORAGE_KEY_RECORDS = 'weekly_bento_records_v1';
 const STORAGE_KEY_SETTINGS = 'weekly_bento_settings_v1';
+const STORAGE_KEY_TOMBSTONES = 'weekly_bento_tombstones_v1';
+const LEGACY_CLAIM_KEY = 'weekly_bento_legacy_claimed_by';
+
+// 按登录用户隔离本地存储：每个 user_id 一套数据，避免多账号数据串台
+let storageNamespace = '';
+
+function nsKey(key: string): string {
+  return storageNamespace ? `${key}__${storageNamespace}` : key;
+}
+
+// 旧版单用户 localStorage 数据只会迁移给第一个在该设备上同步的账号，
+// 之后登录的其他账号不会继承这些数据（避免不同账号数据混在一起）。
+function seedNamespaceFromLegacy(userId: string) {
+  const claimed = localStorage.getItem(LEGACY_CLAIM_KEY);
+  if (claimed && claimed !== userId) return;
+  const keys = [STORAGE_KEY_LOCATIONS, STORAGE_KEY_RECORDS, STORAGE_KEY_SETTINGS, STORAGE_KEY_TOMBSTONES];
+  let copied = false;
+  for (const key of keys) {
+    if (localStorage.getItem(nsKey(key)) === null) {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        localStorage.setItem(nsKey(key), raw);
+        copied = true;
+      }
+    }
+  }
+  if (copied) localStorage.setItem(LEGACY_CLAIM_KEY, userId);
+}
 
 export function getDefaultMealCategoryByTime(): MealCategory {
   const hour = new Date().getHours();
@@ -45,10 +73,16 @@ const DEFAULT_LOCATIONS: BentoLocation[] = [
 
 function loadLocations(): BentoLocation[] {
   try {
-    const data = localStorage.getItem(STORAGE_KEY_LOCATIONS);
+    const data = localStorage.getItem(nsKey(STORAGE_KEY_LOCATIONS));
     if (data) {
       const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // 兼容旧数据：补齐 updatedAt，供云同步冲突合并使用
+        return parsed.map((l: BentoLocation) => ({
+          ...l,
+          updatedAt: typeof l.updatedAt === 'number' ? l.updatedAt : (l.createdAt || 0),
+        }));
+      }
     }
   } catch (e) {}
   return DEFAULT_LOCATIONS;
@@ -56,16 +90,38 @@ function loadLocations(): BentoLocation[] {
 
 function loadRecords(): DailyRecord[] {
   try {
-    const data = localStorage.getItem(STORAGE_KEY_RECORDS);
+    const data = localStorage.getItem(nsKey(STORAGE_KEY_RECORDS));
     if (data) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        // 兼容旧数据：补齐 mealCategory 和 status
-        return parsed.map(r => ({
-          ...r,
-          mealCategory: r.mealCategory || 'lunch',
-          status: r.status || 'confirmed',
-        }));
+        // 兼容旧数据：补齐 mealCategory、status、updatedAt
+        return parsed.map((r: DailyRecord) => {
+          const base = {
+            ...r,
+            mealCategory: r.mealCategory || 'lunch',
+            status: r.status || 'confirmed',
+          };
+          if (typeof base.updatedAt !== 'number') {
+            const t = Date.parse(`${base.date}T${base.drawnAt || '00:00:00'}`);
+            base.updatedAt = Number.isNaN(t) ? 0 : t;
+          }
+          return base;
+        });
+      }
+    }
+  } catch (e) {}
+  return [];
+}
+
+function loadTombstones(): SyncTombstone[] {
+  try {
+    const data = localStorage.getItem(nsKey(STORAGE_KEY_TOMBSTONES));
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        const now = Date.now();
+        // 清理超过 90 天的过期墓碑
+        return parsed.filter((t: SyncTombstone) => now - (t.deletedAt || 0) < 90 * 24 * 3600 * 1000);
       }
     }
   } catch (e) {}
@@ -89,17 +145,25 @@ function loadSettings(): AppSettings {
     activeMode: 'personal',
     enabledMealCategories: ['breakfast', 'lunch', 'tea', 'dinner', 'night'],
     personalSyncConfig: {
-      enabled: false,
-      provider: 'jsonbin',
+      enabled: true,
+      provider: 'supabase',
       apiUrl: '',
       apiKey: '',
-      keyType: 'auto',
-      autoSync: false,
+      autoSync: true,
     },
+    updatedAt: 0,
   };
   try {
-    const data = localStorage.getItem(STORAGE_KEY_SETTINGS);
-    if (data) return { ...defaultSettings, ...JSON.parse(data) };
+    const data = localStorage.getItem(nsKey(STORAGE_KEY_SETTINGS));
+    if (data) {
+      const parsed = JSON.parse(data);
+      const merged = { ...defaultSettings, ...parsed };
+      // 旧版 JSONBin 配置迁移为 Supabase 方案
+      if (merged.personalSyncConfig && (merged.personalSyncConfig as CloudSyncConfig).provider === 'jsonbin') {
+        merged.personalSyncConfig = { ...defaultSettings.personalSyncConfig! };
+      }
+      return merged;
+    }
   } catch (e) {}
   return defaultSettings;
 }
@@ -107,20 +171,43 @@ function loadSettings(): AppSettings {
 const locations = ref<BentoLocation[]>(loadLocations());
 const records = ref<DailyRecord[]>(loadRecords());
 const settings = ref<AppSettings>(loadSettings());
+const tombstones = ref<SyncTombstone[]>(loadTombstones());
 const selectedCategory = ref<MealCategory>(getDefaultMealCategoryByTime());
 
 // 本地内存与缓存监听
 watch(locations, (val) => {
-  localStorage.setItem(STORAGE_KEY_LOCATIONS, JSON.stringify(val));
+  localStorage.setItem(nsKey(STORAGE_KEY_LOCATIONS), JSON.stringify(val));
 }, { deep: true });
 
 watch(records, (val) => {
-  localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(val));
+  localStorage.setItem(nsKey(STORAGE_KEY_RECORDS), JSON.stringify(val));
 }, { deep: true });
 
 watch(settings, (val) => {
-  localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(val));
+  localStorage.setItem(nsKey(STORAGE_KEY_SETTINGS), JSON.stringify(val));
 }, { deep: true });
+
+watch(tombstones, (val) => {
+  localStorage.setItem(nsKey(STORAGE_KEY_TOMBSTONES), JSON.stringify(val));
+}, { deep: true });
+
+function addTombstone(kind: 'record' | 'location', id: string) {
+  if (!tombstones.value.some(t => t.kind === kind && t.id === id)) {
+    tombstones.value.push({ kind, id, deletedAt: Date.now() });
+  }
+}
+
+// 切换当前账号对应的本地数据分区；userId 为空时回到旧版单用户数据
+function setPersonalStorageNamespace(userId: string | null) {
+  const target = userId ? `u_${userId}` : '';
+  if (target === storageNamespace) return;
+  storageNamespace = target;
+  if (target && userId) seedNamespaceFromLegacy(userId);
+  locations.value = loadLocations();
+  records.value = loadRecords();
+  settings.value = loadSettings();
+  tombstones.value = loadTombstones();
+}
 
 import { MEAL_CATEGORIES } from '../types';
 import { useTeamWorkspace } from './useTeamWorkspace';
@@ -150,6 +237,7 @@ export function useBentoStore() {
       updateTeamPermissions({ enabledMealCategories: cats });
     } else {
       settings.value.enabledMealCategories = cats;
+      settings.value.updatedAt = Date.now();
     }
   }
 
@@ -212,11 +300,17 @@ export function useBentoStore() {
     const loc = locations.value.find(l => l.id === id);
     if (loc) {
       loc.isDrawn = true;
+      loc.updatedAt = Date.now();
     }
   }
 
   function resetPool() {
-    locations.value.forEach(l => { l.isDrawn = false; });
+    locations.value.forEach(l => {
+      if (l.isDrawn) {
+        l.isDrawn = false;
+        l.updatedAt = Date.now();
+      }
+    });
   }
 
   // 添加或覆盖预选/确定打卡记录
@@ -248,7 +342,8 @@ export function useBentoStore() {
       tags: loc.tags || [],
       drawnAt: nowTime,
       note: customNote || loc.recommendedDish || '好味推荐！',
-      cost: cost
+      cost: cost,
+      updatedAt: Date.now(),
     };
 
     if (existingIndex >= 0) {
@@ -269,6 +364,7 @@ export function useBentoStore() {
       drawnAt: nowTime,
       status: recordData.status || 'confirmed',
       mealCategory: recordData.mealCategory || selectedCategory.value,
+      updatedAt: Date.now(),
     };
     records.value.unshift(newRecord);
     return newRecord;
@@ -284,6 +380,7 @@ export function useBentoStore() {
         status: 'confirmed',
         cost: cost !== undefined ? cost : target.cost,
         note: note !== undefined ? note : target.note,
+        updatedAt: Date.now(),
       };
     }
   }
@@ -291,11 +388,12 @@ export function useBentoStore() {
   function updateRecord(updatedRecord: DailyRecord) {
     const index = records.value.findIndex(r => r.id === updatedRecord.id);
     if (index >= 0) {
-      records.value[index] = { ...updatedRecord };
+      records.value[index] = { ...updatedRecord, updatedAt: Date.now() };
     }
   }
 
   function deleteRecord(id: string) {
+    addTombstone('record', id);
     records.value = records.value.filter(r => r.id !== id);
   }
 
@@ -305,6 +403,7 @@ export function useBentoStore() {
       id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
       isDrawn: false,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     locations.value.push(newLoc);
   }
@@ -312,21 +411,27 @@ export function useBentoStore() {
   function updateLocation(updated: BentoLocation) {
     const index = locations.value.findIndex(l => l.id === updated.id);
     if (index >= 0) {
-      locations.value[index] = { ...updated };
+      locations.value[index] = { ...updated, updatedAt: Date.now() };
     }
   }
 
   function deleteLocation(id: string) {
+    addTombstone('location', id);
     locations.value = locations.value.filter(l => l.id !== id);
   }
 
   function batchDeleteLocations(ids: string[]) {
     const set = new Set(ids);
+    ids.forEach(id => addTombstone('location', id));
     locations.value = locations.value.filter(l => !set.has(l.id));
   }
 
   function restoreDefaultLocations() {
-    locations.value = JSON.parse(JSON.stringify(DEFAULT_LOCATIONS));
+    const now = Date.now();
+    locations.value = JSON.parse(JSON.stringify(DEFAULT_LOCATIONS)).map((l: BentoLocation) => ({
+      ...l,
+      updatedAt: now,
+    }));
   }
 
   function exportDataJSON() {
@@ -350,17 +455,23 @@ export function useBentoStore() {
     try {
       const parsed = JSON.parse(jsonStr);
       if (parsed.locations && Array.isArray(parsed.locations)) {
-        locations.value = parsed.locations;
+        const now = Date.now();
+        locations.value = parsed.locations.map((l: BentoLocation) => ({
+          ...l,
+          updatedAt: now,
+        }));
       }
       if (parsed.records && Array.isArray(parsed.records)) {
+        const now = Date.now();
         records.value = parsed.records.map((r: any) => ({
           ...r,
           mealCategory: r.mealCategory || 'lunch',
           status: r.status || 'confirmed',
+          updatedAt: now,
         }));
       }
       if (parsed.settings && typeof parsed.settings === 'object') {
-        settings.value = { ...settings.value, ...parsed.settings };
+        settings.value = { ...settings.value, ...parsed.settings, updatedAt: Date.now() };
       }
       return true;
     } catch (e) {
@@ -375,6 +486,7 @@ export function useBentoStore() {
       id: (Date.now() + idx).toString() + Math.random().toString(36).substring(2, 5),
       isDrawn: false,
       createdAt: Date.now() + idx,
+      updatedAt: Date.now() + idx,
     }));
 
     if (overwrite) {
@@ -407,6 +519,9 @@ export function useBentoStore() {
     locations,
     records,
     settings,
+    tombstones,
+    addTombstone,
+    setPersonalStorageNamespace,
     selectedCategory,
     setSelectedCategory,
     visibleMealCategories,
