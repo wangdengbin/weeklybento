@@ -57,6 +57,7 @@ function today() {
 const defaultPermissions: TeamPermissions = {
   allowMemberReroll: true,
   allowMemberEditLocation: true,
+  enabledMealCategories: ['breakfast', 'lunch', 'tea', 'dinner', 'night'],
 };
 
 const teamPermissions = ref<TeamPermissions>({ ...defaultPermissions });

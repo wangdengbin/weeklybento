@@ -24,6 +24,31 @@
 
     <!-- TAB 1: 地点池配置 -->
     <div v-if="activeTab === 'locations'" class="tab-content">
+      <!-- 🍱 场景餐池展示开关配置区 -->
+      <div class="meal-categories-config-card glass-card">
+        <div class="config-card-header">
+          <Utensils :size="16" class="text-orange" />
+          <span class="header-title">🍱 场景餐池展示配置（勾选控制在前台显隐）</span>
+        </div>
+        <div class="cat-checkbox-grid">
+          <label 
+            v-for="cat in MEAL_CATEGORIES" 
+            :key="cat.key" 
+            class="cat-toggle-label" 
+            :class="{ 'is-checked': enabledCatKeys.includes(cat.key) }"
+          >
+            <input 
+              type="checkbox" 
+              :value="cat.key" 
+              :checked="enabledCatKeys.includes(cat.key)" 
+              @change="handleToggleCategory(cat.key)"
+            />
+            <span class="cat-icon">{{ cat.emoji }}</span>
+            <span class="cat-text">{{ cat.name }}</span>
+          </label>
+        </div>
+      </div>
+
       <div class="toolbar">
         <button class="btn-primary add-loc-btn" @click="openAddLocModal">
           <Plus :size="16" />
@@ -342,12 +367,13 @@ import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types
 const emit = defineEmits(['close']);
 
 
-const { locations: personalLocations, addLocation, batchAddLocations, updateLocation, deleteLocation, batchDeleteLocations: batchDeletePersonalLocations, resetPool, restoreDefaultLocations, exportDataJSON, importDataJSON, settings } = useBentoStore();
+const { locations: personalLocations, addLocation, batchAddLocations, updateLocation, deleteLocation, batchDeleteLocations: batchDeletePersonalLocations, resetPool, restoreDefaultLocations, exportDataJSON, importDataJSON, settings, updateEnabledMealCategories } = useBentoStore();
 const { logout, changePassword } = useAdmin();
 const { isSyncing, pushToCloud, pullFromCloud } = useCloudSync();
 const {
   team,
   locations: teamLocations,
+  teamPermissions,
   addLocation: addTeamLocation,
   batchAddLocations: batchAddTeamLocations,
   updateLocation: updateTeamLocation,
@@ -355,6 +381,33 @@ const {
   batchDeleteLocations: batchDeleteTeamLocations,
 } = useTeamWorkspace();
 const locations = computed(() => settings.value.activeMode === 'team' ? teamLocations.value : personalLocations.value);
+
+const enabledCatKeys = computed<MealCategory[]>(() => {
+  const defaultCats: MealCategory[] = ['breakfast', 'lunch', 'tea', 'dinner', 'night'];
+  if (settings.value.activeMode === 'team') {
+    return (teamPermissions.value?.enabledMealCategories as MealCategory[]) || defaultCats;
+  }
+  return (settings.value.enabledMealCategories as MealCategory[]) || defaultCats;
+});
+
+function handleToggleCategory(catKey: MealCategory) {
+  if (settings.value.soundEnabled) soundEffects.playTick(600);
+  const current: MealCategory[] = [...enabledCatKeys.value];
+  const idx = current.indexOf(catKey);
+  if (idx >= 0) {
+    if (current.length <= 1) {
+      alert('至少需要保留一个开启展示的餐池分类！');
+      return;
+    }
+    current.splice(idx, 1);
+  } else {
+    current.push(catKey);
+  }
+  updateEnabledMealCategories(current);
+  if (settings.value.activeMode === 'personal') {
+    pushToCloud(true);
+  }
+}
 
 const selectedLocIds = ref<string[]>([]);
 const isAllSelected = computed(() => locations.value.length > 0 && selectedLocIds.value.length === locations.value.length);
@@ -745,6 +798,63 @@ function handleImportFile(event: Event) {
   max-height: 60vh;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.meal-categories-config-card {
+  padding: 12px 14px;
+  background: #FFF7ED;
+  border: 1px dashed #FFD8B3;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #C2410C;
+}
+
+.cat-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cat-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #FFFFFF;
+  border: 1px solid #FED7AA;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #64748B;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.cat-toggle-label.is-checked {
+  border-color: #F97316;
+  background: #FFF3E0;
+  color: #EA580C;
+}
+
+.cat-toggle-label input[type="checkbox"] {
+  accent-color: #EA580C;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }
 
 .toolbar {

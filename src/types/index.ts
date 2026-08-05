@@ -36,6 +36,7 @@ export interface BentoLocation {
 export interface TeamPermissions {
   allowMemberReroll: boolean; // 是否允许团队普通成员重新 Roll
   allowMemberEditLocation: boolean; // 是否允许团队普通成员编辑地点池
+  enabledMealCategories?: MealCategory[]; // 开启展示的餐池分类
 }
 
 export interface DailyRecord {
@@ -85,4 +86,5 @@ export interface AppSettings {
   personalSyncConfig?: CloudSyncConfig; // 个人云端同步设置
   cloudSync?: CloudSyncConfig; // 兼容逻辑
   monthlyBudget?: number; // 月伙食预算 (0 或 undefined 表示未设置)
+  enabledMealCategories?: MealCategory[]; // 开启展示的餐池分类列表
 }

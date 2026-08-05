@@ -3,7 +3,7 @@
     <!-- 场景餐池 Tab 切换器 -->
     <div class="meal-categories-selector glass-card">
       <button 
-        v-for="cat in MEAL_CATEGORIES" 
+        v-for="cat in visibleMealCategories" 
         :key="cat.key" 
         class="cat-tab-btn" 
         :class="{ active: selectedCategory === cat.key }"
@@ -162,7 +162,7 @@
             <span>📅 今日便当打卡清单</span>
           </div>
           <div class="checklist-items">
-            <div v-for="cat in MEAL_CATEGORIES" :key="cat.key" class="check-item-row" :class="{ 'is-active': selectedCategory === cat.key }">
+            <div v-for="cat in visibleMealCategories" :key="cat.key" class="check-item-row" :class="{ 'is-active': selectedCategory === cat.key }">
               <div class="cat-label">
                 <span class="cat-icon">{{ cat.emoji }}</span>
                 <span class="cat-title">{{ cat.name.replace('池','') }}</span>
@@ -233,6 +233,7 @@ const {
   records,
   selectedCategory,
   setSelectedCategory,
+  visibleMealCategories,
   confirmDailyRecord,
 } = useBentoStore();
 const {

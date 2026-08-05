@@ -87,6 +87,7 @@ function loadSettings(): AppSettings {
     weeklyNoRepeat: true,
     soundEnabled: true,
     activeMode: 'personal',
+    enabledMealCategories: ['breakfast', 'lunch', 'tea', 'dinner', 'night'],
     personalSyncConfig: {
       enabled: false,
       provider: 'jsonbin',
@@ -121,7 +122,37 @@ watch(settings, (val) => {
   localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(val));
 }, { deep: true });
 
+import { MEAL_CATEGORIES } from '../types';
+import { useTeamWorkspace } from './useTeamWorkspace';
+
 export function useBentoStore() {
+  const { teamPermissions, updateTeamPermissions } = useTeamWorkspace();
+
+  // 根据当前激活模式过滤显示的 5 大餐池分类
+  const visibleMealCategories = computed(() => {
+    const enabledList = settings.value.activeMode === 'team'
+      ? (teamPermissions.value?.enabledMealCategories || ['breakfast', 'lunch', 'tea', 'dinner', 'night'])
+      : (settings.value.enabledMealCategories || ['breakfast', 'lunch', 'tea', 'dinner', 'night']);
+
+    const set = new Set(enabledList);
+    const result = MEAL_CATEGORIES.filter(c => set.has(c.key));
+    return result.length > 0 ? result : MEAL_CATEGORIES;
+  });
+
+  watch(visibleMealCategories, (list) => {
+    if (!list.some(c => c.key === selectedCategory.value) && list.length > 0) {
+      selectedCategory.value = list[0].key;
+    }
+  }, { immediate: true });
+
+  function updateEnabledMealCategories(cats: MealCategory[]) {
+    if (settings.value.activeMode === 'team') {
+      updateTeamPermissions({ enabledMealCategories: cats });
+    } else {
+      settings.value.enabledMealCategories = cats;
+    }
+  }
+
   // 根据餐池过滤地点
   function isLocationMatchingCategory(loc: BentoLocation, category: MealCategory): boolean {
     if (!loc.mealCategories || loc.mealCategories.length === 0) return true;
@@ -363,6 +394,8 @@ export function useBentoStore() {
     settings,
     selectedCategory,
     setSelectedCategory,
+    visibleMealCategories,
+    updateEnabledMealCategories,
     availablePool,
     drawnList,
     isPoolEmpty,

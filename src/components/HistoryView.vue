@@ -172,7 +172,7 @@
           <div class="form-item">
             <label>餐别时段：</label>
             <div class="meal-cat-radios">
-              <label v-for="cat in MEAL_CATEGORIES" :key="cat.key" class="radio-item">
+              <label v-for="cat in visibleMealCategories" :key="cat.key" class="radio-item">
                 <input type="radio" v-model="form.mealCategory" :value="cat.key" />
                 <span>{{ cat.emoji }} {{ cat.name }}</span>
               </label>
@@ -232,7 +232,7 @@ import { useCloudSync } from '../composables/useCloudSync';
 import { soundEffects } from '../composables/useAudio';
 import { MEAL_CATEGORIES, type DailyRecord, type MealCategory, type RecordStatus } from '../types';
 
-const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings } = useBentoStore();
+const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings, visibleMealCategories } = useBentoStore();
 const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
 const { pushToCloud } = useCloudSync();
 
