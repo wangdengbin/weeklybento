@@ -180,14 +180,23 @@
               </div>
 
               <div class="cat-content">
-                <template v-if="getTodayRecordByCat(cat.key)">
-                  <span class="food-emoji">{{ getTodayRecordByCat(cat.key)?.emoji }}</span>
-                  <span class="food-name">{{ getTodayRecordByCat(cat.key)?.locationName }}</span>
-                  
-                  <span v-if="getTodayRecordByCat(cat.key)?.status === 'planned'" class="badge-status planned">📌 预选</span>
-                  <span v-else class="badge-status confirmed">
-                    ✅ {{ getTodayRecordByCat(cat.key)?.cost ? `￥${getTodayRecordByCat(cat.key)?.cost}` : '已打卡' }}
-                  </span>
+                <template v-if="getTodayRecordsByCat(cat.key).length > 0">
+                  <div class="records-sub-list">
+                    <div v-for="rec in getTodayRecordsByCat(cat.key)" :key="rec.id" class="single-rec-item">
+                      <span class="food-emoji">{{ rec.emoji }}</span>
+                      <span class="food-name">{{ rec.locationName }}</span>
+                      
+                      <span v-if="rec.status === 'planned'" class="badge-status planned">📌 预选</span>
+                      <span v-else class="badge-status confirmed">
+                        ✅ {{ rec.cost ? `￥${rec.cost}` : '已打卡' }}
+                      </span>
+
+                      <!-- 若为预选记录，提供内联确认按钮 -->
+                      <button v-if="rec.status === 'planned'" class="mini-btn action-confirm inline-confirm" @click="handleQuickConfirm(rec.id)" title="确认吃了">
+                        ✅ 吃了
+                      </button>
+                    </div>
+                  </div>
                 </template>
                 <template v-else>
                   <span class="empty-text">尚无安排</span>
@@ -196,22 +205,31 @@
 
               <div class="cat-actions">
                 <button 
-                  v-if="!getTodayRecordByCat(cat.key)" 
+                  v-if="getTodayRecordsByCat(cat.key).length === 0" 
                   class="mini-btn action-roll"
                   @click="handleSelectCategory(cat.key)"
                 >
                   🎲 去摇号
                 </button>
-                <template v-else-if="getTodayRecordByCat(cat.key)?.status === 'planned'">
-                  <button class="mini-btn action-reroll" @click="handleSelectCategory(cat.key)" title="切到此餐池重新摇号">
+                <template v-else>
+                  <button 
+                    v-if="getTodayRecordsByCat(cat.key).some(r => r.status === 'planned')" 
+                    class="mini-btn action-reroll" 
+                    @click="handleSelectCategory(cat.key)" 
+                    title="切到此餐池重新摇号"
+                  >
                     🔄 重Roll
                   </button>
-                  <button class="mini-btn action-confirm" @click="handleQuickConfirm(getTodayRecordByCat(cat.key)!.id)" title="确认吃了">
-                    ✅ 吃了
+                  <span v-else class="done-check">✓</span>
+
+                  <!-- 微型隐蔽再记一笔按钮 (小概率事件：一天两杯奶茶/两顿晚餐等) -->
+                  <button 
+                    class="mini-add-extra-btn" 
+                    @click="openAddExtraModal(cat.key)" 
+                    title="再记一笔 (小概率多条打卡，如第2杯奶茶)"
+                  >
+                    <Plus :size="11" />
                   </button>
-                </template>
-                <template v-else>
-                  <span class="done-check">✓</span>
                 </template>
               </div>
             </div>
@@ -268,12 +286,60 @@
         </div>
       </div>
     </div>
+
+    <!-- 极简加记打卡/多条打卡 Modal -->
+    <div v-if="showAddExtraModal" class="manual-select-modal-overlay" @click.self="showAddExtraModal = false">
+      <div class="manual-select-modal glass-card extra-record-modal">
+        <div class="modal-header">
+          <h3>再记一笔【{{ extraCatMeta?.name || '打卡' }}】</h3>
+          <button class="close-btn" @click="showAddExtraModal = false">×</button>
+        </div>
+        
+        <p class="sub-tip">适用于一日喝多杯奶茶、吃多顿主食等小概率事件，默认直接完成打卡。</p>
+        
+        <form @submit.prevent="submitExtraRecord" class="extra-form">
+          <div class="form-item">
+            <label>餐品 / 店名：</label>
+            <input 
+              type="text" 
+              v-model="extraForm.locationName" 
+              placeholder="例如：霸王茶姬 (或第二顿晚餐)" 
+              required 
+              class="input-field" 
+            />
+          </div>
+
+          <div class="form-item">
+            <label>实付金额 (元，选填)：</label>
+            <input 
+              type="number" 
+              step="0.1" 
+              v-model.number="extraForm.cost" 
+              placeholder="如 18" 
+              class="input-field" 
+            />
+          </div>
+
+          <div class="form-item">
+            <label>打卡状态：</label>
+            <div class="status-badge-selected">
+              ✅ 已打卡 (默认选中状态)
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" @click="showAddExtraModal = false">取消</button>
+            <button type="submit" class="btn-primary">确认加记</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck, Search } from 'lucide-vue-next';
+import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck, Search, Plus } from 'lucide-vue-next';
 import confetti from 'canvas-confetti';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
@@ -287,9 +353,11 @@ const {
   availablePool: personalAvailablePool,
   drawnList: personalDrawnList,
   getRandomLocation,
+  getTodayDateString,
   resetPool,
   settings,
   addDailyRecord,
+  addDirectRecord,
   records,
   selectedCategory,
   setSelectedCategory,
@@ -312,8 +380,48 @@ function handleSelectCategory(catKey: MealCategory) {
   prepareReels();
 }
 
-function getTodayRecordByCat(catKey: MealCategory) {
-  return records.value.find(r => r.date === todayStr.value && (r.mealCategory || 'lunch') === catKey);
+function getTodayRecordsByCat(catKey: MealCategory) {
+  return records.value.filter(r => r.date === todayStr.value && (r.mealCategory || 'lunch') === catKey);
+}
+
+const showAddExtraModal = ref(false);
+const extraForm = ref({
+  mealCategory: 'tea' as MealCategory,
+  locationName: '',
+  cost: undefined as number | undefined,
+  emoji: '🍱',
+});
+const extraCatMeta = computed(() => MEAL_CATEGORIES.find(c => c.key === extraForm.value.mealCategory));
+
+function openAddExtraModal(catKey: MealCategory) {
+  if (settings.value.soundEnabled) soundEffects.playTick(600);
+  const catMeta = MEAL_CATEGORIES.find(c => c.key === catKey);
+  extraForm.value = {
+    mealCategory: catKey,
+    locationName: '',
+    cost: undefined,
+    emoji: catMeta?.emoji || '🍱',
+  };
+  showAddExtraModal.value = true;
+}
+
+function submitExtraRecord() {
+  if (!extraForm.value.locationName.trim()) return;
+  
+  addDirectRecord({
+    date: todayStr.value,
+    mealCategory: extraForm.value.mealCategory,
+    status: 'confirmed',
+    locationId: 'custom-' + Date.now(),
+    locationName: extraForm.value.locationName.trim(),
+    emoji: extraForm.value.emoji,
+    cost: extraForm.value.cost,
+    note: '再记一笔打卡',
+    tags: ['多条记录']
+  });
+
+  if (settings.value.soundEnabled) soundEffects.playTick(900);
+  showAddExtraModal.value = false;
 }
 
 function handleQuickConfirm(recordId: string) {
@@ -344,7 +452,7 @@ const todayTeamResult = computed(() => teamTodayResult.value);
 const isRolling = ref(false);
 const forceShowMachine = ref(false);
 
-const todayStr = computed(() => new Date().toISOString().slice(0, 10));
+const todayStr = computed(() => getTodayDateString());
 
 // 手动选择状态与方法
 const showManualSelectModal = ref(false);
@@ -383,6 +491,10 @@ async function selectLocationManually(loc: BentoLocation) {
       await addOrUpdateTeamRecord(loc.id, todayStr.value, '团队手动选定');
       showManualSelectModal.value = false;
       forceShowMachine.value = false;
+      // 兜底反馈：若团队结果卡片条件未满足（如日期边界/数据未刷新），至少明确告知已选定
+      if (!hasTodayTeamResult.value) {
+        alert(`已手动选定：${loc.emoji || '🍱'} ${loc.name}，并同步到搭子圈`);
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : '团队手动选定失败');
     } finally {
@@ -1407,5 +1519,94 @@ function handleResetPool() {
 @keyframes scaleIn {
   from { transform: scale(0.96); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+/* 微型隐蔽再记一笔按钮 (多条打卡小概率事件) */
+.mini-add-extra-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(241, 245, 249, 0.5);
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 6px;
+  opacity: 0.6;
+}
+
+.mini-add-extra-btn:hover {
+  opacity: 1;
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: scale(1.15);
+}
+
+.records-sub-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.single-rec-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inline-confirm {
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  margin-left: 4px;
+}
+
+/* 极简多条打卡弹窗特有样式 */
+.extra-record-modal {
+  max-width: 380px;
+}
+
+.sub-tip {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.extra-form .form-item {
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.extra-form label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.status-badge-selected {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #ECFDF5;
+  color: #059669;
+  border: 1px solid #A7F3D0;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 </style>

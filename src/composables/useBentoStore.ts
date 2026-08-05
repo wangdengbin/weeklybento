@@ -42,6 +42,12 @@ export function getDefaultMealCategoryByTime(): MealCategory {
   return 'night';
 }
 
+// “今天”统一使用 Asia/Shanghai 时区，与团队业务日期(roll_team RPC)保持一致，
+// 避免凌晨 0-8 点 UTC 日期与本地日期错位导致结果卡片不显示/记录记到昨天
+export function getTodayDateString(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+}
+
 // 默认池以常见用餐场景为主；已有本地数据不会被自动覆盖。
 const DEFAULT_LOCATIONS: BentoLocation[] = [
   { id: '1', name: '包子豆浆', emoji: '🥟', tags: ['早餐', '快捷', '实惠'], priceRange: '￥6-12', recommendedDish: '鲜肉包+无糖豆浆', weight: 1, isDrawn: false, createdAt: Date.now(), mealCategories: ['breakfast'] },
@@ -322,7 +328,7 @@ export function useBentoStore() {
     status: RecordStatus = 'planned', 
     cost?: number
   ): DailyRecord {
-    const today = customDate || new Date().toISOString().slice(0, 10);
+    const today = customDate || getTodayDateString();
     const nowTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     const targetCat = category || selectedCategory.value;
 
@@ -446,7 +452,7 @@ export function useBentoStore() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `WeeklyBento_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `WeeklyBento_Backup_${getTodayDateString()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -522,6 +528,7 @@ export function useBentoStore() {
     tombstones,
     addTombstone,
     setPersonalStorageNamespace,
+    getTodayDateString,
     selectedCategory,
     setSelectedCategory,
     visibleMealCategories,

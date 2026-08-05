@@ -232,11 +232,11 @@ import { useCloudSync } from '../composables/useCloudSync';
 import { soundEffects } from '../composables/useAudio';
 import { MEAL_CATEGORIES, type DailyRecord, type MealCategory, type RecordStatus } from '../types';
 
-const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings, visibleMealCategories } = useBentoStore();
+const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings, visibleMealCategories, getTodayDateString } = useBentoStore();
 const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
 const { pushToCloud } = useCloudSync();
 
-const todayStr = computed(() => new Date().toISOString().slice(0, 10));
+const todayStr = computed(() => getTodayDateString());
 
 // 跨日过往未结预选记录
 const expiredPlannedRecords = computed(() => {
@@ -276,7 +276,7 @@ const isEditing = ref(false);
 
 const form = ref({
   id: '',
-  date: new Date().toISOString().slice(0, 10),
+  date: getTodayDateString(),
   mealCategory: 'lunch' as MealCategory,
   status: 'confirmed' as RecordStatus,
   locationId: '',
@@ -289,7 +289,7 @@ const form = ref({
 
 // 个人模式月度消费统计
 const stats = computed(() => {
-  const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const currentMonthStr = getTodayDateString().slice(0, 7); // YYYY-MM
   const monthRecords = personalRecords.value.filter(r => r.date.startsWith(currentMonthStr));
   
   let monthlyTotal = 0;
@@ -359,7 +359,7 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `WeeklyBento_记账明细_${new Date().toISOString().slice(0, 7)}.csv`;
+  a.download = `WeeklyBento_记账明细_${getTodayDateString().slice(0, 7)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   if (settings.value.soundEnabled) soundEffects.playTick(800);
@@ -403,7 +403,7 @@ function formatDate(dateStr: string) {
     dateObj = new Date(dateStr);
   }
   
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayDateString();
   const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   const week = weekDays[dateObj.getDay()];
   const month = dateObj.getMonth() + 1;
@@ -430,7 +430,7 @@ function openAddModal() {
   const defaultLoc = locations.value[0];
   form.value = {
     id: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: getTodayDateString(),
     mealCategory: 'lunch',
     status: 'confirmed',
     locationId: defaultLoc?.id || '',
@@ -450,7 +450,7 @@ function openEditModal(rec: DailyRecord) {
     id: rec.id,
     date: rec.date,
     mealCategory: rec.mealCategory || 'lunch',
-    status: rec.status || 'confirmed',
+    status: rec.status === 'planned' ? 'confirmed' : (rec.status || 'confirmed'),
     locationId: rec.locationId,
     locationName: rec.locationName,
     emoji: rec.emoji,
