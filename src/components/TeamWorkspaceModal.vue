@@ -549,7 +549,7 @@ async function handleLeaveTeam(t: { id: string; name: string }) {
   min-width: 0;
 }
 .member-dot { width: 6px; height: 6px; border-radius: 50%; background: #22C55E; flex-shrink: 0; }
-.member-email { font-weight: 600; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.member-email { font-weight: 600; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 .me-badge { font-size: 10px; font-weight: 800; background: #DC2626; color: #FFFFFF; padding: 0 4px; border-radius: 3px; }
 .member-role-badge {
   font-size: 10px;

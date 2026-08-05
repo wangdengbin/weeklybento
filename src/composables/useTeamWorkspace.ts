@@ -150,7 +150,9 @@ async function fetchTeamMembers(targetTeamId?: string): Promise<TeamMember[]> {
 
   try {
     const { data: sessionData } = await supabase.auth.getSession();
-    const currentUserId = sessionData.session?.user?.id;
+    const currentUser = sessionData.session?.user;
+    const currentUserId = currentUser?.id;
+    const currentUserEmail = currentUser?.email;
 
     const { data, error } = await supabase
       .from('team_members')
@@ -163,7 +165,7 @@ async function fetchTeamMembers(targetTeamId?: string): Promise<TeamMember[]> {
       user_id: row.user_id,
       role: row.role,
       joined_at: new Date(row.joined_at).toLocaleDateString('zh-CN'),
-      email: row.user_id === currentUserId ? '我' : `搭子成员 (${row.user_id.slice(0, 6)})`,
+      email: row.user_id === currentUserId ? (currentUserEmail || '我') : `成员 (${row.user_id.slice(0, 6)})`,
       is_me: row.user_id === currentUserId,
     }));
     return members.value;
