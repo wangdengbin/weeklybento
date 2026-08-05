@@ -386,6 +386,21 @@ export function useBentoStore() {
 
   function switchMode(mode: 'personal' | 'team') {
     settings.value.activeMode = mode;
+    const url = new URL(window.location.href);
+    if (mode === 'personal') {
+      if (url.searchParams.has('team') || url.searchParams.has('invite')) {
+        url.searchParams.delete('team');
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, '', url);
+      }
+    } else if (mode === 'team') {
+      const activeTeamId = localStorage.getItem('weekly_bento_active_team');
+      if (activeTeamId) {
+        url.searchParams.set('team', activeTeamId);
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, '', url);
+      }
+    }
   }
 
   return {
