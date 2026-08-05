@@ -14,24 +14,33 @@ export function getDefaultMealCategoryByTime(): MealCategory {
   return 'night';
 }
 
-// 预设默认地点池 (增加部分多样性分类)
+// 默认池以常见用餐场景为主；已有本地数据不会被自动覆盖。
 const DEFAULT_LOCATIONS: BentoLocation[] = [
-  { id: '1', name: '隆江猪脚饭', emoji: '🍱', tags: ['快餐', '肉食', '高能量'], priceRange: '￥18-28', recommendedDish: '双拼猪脚饭加卤蛋', weight: 1, isDrawn: false, createdAt: Date.now(), mealCategories: ['lunch', 'dinner'] },
-  { id: '2', name: '日式拉面', emoji: '🍜', tags: ['汤面', '日料', '热乎'], priceRange: '￥25-45', recommendedDish: '豚骨叉烧拉面', weight: 1, isDrawn: false, createdAt: Date.now() + 1, mealCategories: ['lunch', 'dinner', 'night'] },
-  { id: '3', name: '麻辣香锅', emoji: '🥘', tags: ['重口味', '下饭', '香辣'], priceRange: '￥30-50', recommendedDish: '牛肉+午餐肉+方便面', weight: 1, isDrawn: false, createdAt: Date.now() + 2, mealCategories: ['lunch', 'dinner', 'night'] },
-  { id: '4', name: '萨莉亚 Saizeriya', emoji: '🍕', tags: ['西餐', '性价比', '快乐餐'], priceRange: '￥20-35', recommendedDish: '蒜香蜗牛+金米饭', weight: 1, isDrawn: false, createdAt: Date.now() + 3, mealCategories: ['lunch', 'dinner'] },
-  { id: '5', name: '酸菜鱼饭', emoji: '🐟', tags: ['酸辣', '下饭', '鱼肉'], priceRange: '￥25-38', recommendedDish: '老坛酸菜无骨鱼', weight: 1, isDrawn: false, createdAt: Date.now() + 4, mealCategories: ['lunch', 'dinner'] },
-  { id: '6', name: '轻食沙拉碗', emoji: '🥗', tags: ['减脂', '清淡', '健康'], priceRange: '￥28-40', recommendedDish: '香煎鸡胸肉沙拉', weight: 1, isDrawn: false, createdAt: Date.now() + 5, mealCategories: ['breakfast', 'lunch', 'dinner'] },
-  { id: '7', name: '潮汕牛肉粿条', emoji: '🍲', tags: ['清淡', '鲜美', '广东特色'], priceRange: '￥20-35', recommendedDish: '吊龙牛肉汤粿条', weight: 1, isDrawn: false, createdAt: Date.now() + 6, mealCategories: ['breakfast', 'lunch', 'dinner', 'night'] },
-  { id: '8', name: '美式手工汉堡', emoji: '🍔', tags: ['美式', '高热量', '解压'], priceRange: '￥35-60', recommendedDish: '双层芝士牛肉堡', weight: 1, isDrawn: false, createdAt: Date.now() + 7, mealCategories: ['lunch', 'dinner', 'night'] },
-  { id: '9', name: '四川麻辣烫', emoji: '🍢', tags: ['自选', '麻辣', '丰富'], priceRange: '￥20-35', recommendedDish: '骨汤中辣+芝麻酱', weight: 1, isDrawn: false, createdAt: Date.now() + 8, mealCategories: ['lunch', 'dinner', 'night'] },
-  { id: '10', name: '黄焖鸡米饭', emoji: '🍗', tags: ['经典', '米饭', '香浓'], priceRange: '￥18-26', recommendedDish: '加辣黄焖鸡+腐竹', weight: 1, isDrawn: false, createdAt: Date.now() + 9, mealCategories: ['lunch', 'dinner'] },
-  { id: '11', name: '霸王茶姬 / 喜茶', emoji: '🧋', tags: ['饮品', '奶茶', '续命'], priceRange: '￥15-22', recommendedDish: '伯牙绝弦大杯去冰', weight: 1, isDrawn: false, createdAt: Date.now() + 10, mealCategories: ['tea'] },
-  { id: '12', name: '精品生椰拿铁/美式', emoji: '☕', tags: ['咖啡', '提神', '下午茶'], priceRange: '￥12-25', recommendedDish: '生椰拿铁无糖', weight: 1, isDrawn: false, createdAt: Date.now() + 11, mealCategories: ['breakfast', 'tea'] },
-  { id: '13', name: '广式早茶小笼包', emoji: '🥟', tags: ['早点', '热乎', '地道'], priceRange: '￥15-30', recommendedDish: '鲜肉小笼包+生滚皮蛋瘦肉粥', weight: 1, isDrawn: false, createdAt: Date.now() + 12, mealCategories: ['breakfast'] },
-  { id: '14', name: '深夜大排档烧烤串串', emoji: '🍢', tags: ['夜宵', '解馋', '下酒'], priceRange: '￥30-60', recommendedDish: '烤五花肉+五香羊肉串', weight: 1, isDrawn: false, createdAt: Date.now() + 13, mealCategories: ['night'] },
-  { id: '15', name: '便利店便当/三明治', emoji: '🍙', tags: ['快速', '省钱', '便利'], priceRange: '￥12-22', recommendedDish: '照烧鸡腿便当+关东煮', weight: 1, isDrawn: false, createdAt: Date.now() + 14, mealCategories: ['breakfast', 'lunch', 'night'] },
-  { id: '16', name: '海南鸡饭', emoji: '🐔', tags: ['鲜嫩', '米饭', '东南亚'], priceRange: '￥25-38', recommendedDish: '白切鸡饭三色酱', weight: 1, isDrawn: false, createdAt: Date.now() + 15, mealCategories: ['lunch', 'dinner'] },
+  { id: '1', name: '包子豆浆', emoji: '🥟', tags: ['早餐', '快捷', '实惠'], priceRange: '￥6-12', recommendedDish: '鲜肉包+无糖豆浆', weight: 1, isDrawn: false, createdAt: Date.now(), mealCategories: ['breakfast'] },
+  { id: '2', name: '粥铺早餐', emoji: '🥣', tags: ['早餐', '热乎', '清淡'], priceRange: '￥10-18', recommendedDish: '皮蛋瘦肉粥+鸡蛋', weight: 1, isDrawn: false, createdAt: Date.now() + 1, mealCategories: ['breakfast', 'night'] },
+  { id: '3', name: '肠粉 / 汤粉面', emoji: '🍜', tags: ['早餐', '现做', '饱腹'], priceRange: '￥10-20', recommendedDish: '鸡蛋瘦肉肠粉', weight: 1, isDrawn: false, createdAt: Date.now() + 2, mealCategories: ['breakfast'] },
+  { id: '4', name: '麦当劳 / 肯德基早餐', emoji: '🥪', tags: ['早餐', '连锁', '快捷'], priceRange: '￥12-25', recommendedDish: '早餐堡+咖啡', weight: 1, isDrawn: false, createdAt: Date.now() + 3, mealCategories: ['breakfast'] },
+  { id: '5', name: '便利店早餐', emoji: '🍙', tags: ['早餐', '便利', '省时'], priceRange: '￥8-18', recommendedDish: '饭团+牛奶', weight: 1, isDrawn: false, createdAt: Date.now() + 4, mealCategories: ['breakfast'] },
+  { id: '6', name: '隆江猪脚饭 / 烧腊饭', emoji: '🍱', tags: ['米饭', '快餐', '肉食'], priceRange: '￥18-30', recommendedDish: '双拼饭加青菜', weight: 1, isDrawn: false, createdAt: Date.now() + 5, mealCategories: ['lunch', 'dinner'] },
+  { id: '7', name: '黄焖鸡米饭', emoji: '🍗', tags: ['米饭', '经典', '下饭'], priceRange: '￥18-28', recommendedDish: '黄焖鸡+腐竹', weight: 1, isDrawn: false, createdAt: Date.now() + 6, mealCategories: ['lunch', 'dinner'] },
+  { id: '8', name: '自选快餐 / 称重餐', emoji: '🥡', tags: ['自选', '快餐', '均衡'], priceRange: '￥15-30', recommendedDish: '两荤一素', weight: 1, isDrawn: false, createdAt: Date.now() + 7, mealCategories: ['lunch', 'dinner'] },
+  { id: '9', name: '兰州拉面 / 牛肉面', emoji: '🍜', tags: ['面食', '热乎', '实惠'], priceRange: '￥15-28', recommendedDish: '牛肉面加蛋', weight: 1, isDrawn: false, createdAt: Date.now() + 8, mealCategories: ['lunch', 'dinner', 'night'] },
+  { id: '10', name: '麻辣烫 / 冒菜', emoji: '🍲', tags: ['自选', '麻辣', '丰富'], priceRange: '￥20-38', recommendedDish: '骨汤微辣+芝麻酱', weight: 1, isDrawn: false, createdAt: Date.now() + 9, mealCategories: ['lunch', 'dinner', 'night'] },
+  { id: '11', name: '麻辣香锅', emoji: '🥘', tags: ['重口味', '香辣', '聚餐'], priceRange: '￥30-55', recommendedDish: '牛肉+午餐肉+蔬菜', weight: 1, isDrawn: false, createdAt: Date.now() + 10, mealCategories: ['lunch', 'dinner'] },
+  { id: '12', name: '酸菜鱼 / 水煮鱼', emoji: '🐟', tags: ['鱼肉', '下饭', '聚餐'], priceRange: '￥30-60', recommendedDish: '无骨酸菜鱼配米饭', weight: 1, isDrawn: false, createdAt: Date.now() + 11, mealCategories: ['lunch', 'dinner'] },
+  { id: '13', name: '潮汕牛肉粿条', emoji: '🍲', tags: ['汤粉', '鲜美', '清淡'], priceRange: '￥20-35', recommendedDish: '牛肉汤粿条', weight: 1, isDrawn: false, createdAt: Date.now() + 12, mealCategories: ['lunch', 'dinner', 'night'] },
+  { id: '14', name: '轻食沙拉 / 健身餐', emoji: '🥗', tags: ['轻食', '健康', '低负担'], priceRange: '￥25-42', recommendedDish: '鸡胸肉谷物碗', weight: 1, isDrawn: false, createdAt: Date.now() + 13, mealCategories: ['lunch', 'dinner'] },
+  { id: '15', name: '日式拉面 / 乌冬面', emoji: '🍜', tags: ['日料', '面食', '热乎'], priceRange: '￥25-45', recommendedDish: '豚骨拉面', weight: 1, isDrawn: false, createdAt: Date.now() + 14, mealCategories: ['lunch', 'dinner'] },
+  { id: '16', name: '汉堡 / 炸鸡', emoji: '🍔', tags: ['快餐', '解馋', '高能量'], priceRange: '￥20-45', recommendedDish: '牛肉堡套餐', weight: 1, isDrawn: false, createdAt: Date.now() + 15, mealCategories: ['lunch', 'dinner', 'night'] },
+  { id: '17', name: '披萨 / 意面', emoji: '🍕', tags: ['西餐', '聚餐', '休闲'], priceRange: '￥30-60', recommendedDish: '意面+小食拼盘', weight: 1, isDrawn: false, createdAt: Date.now() + 16, mealCategories: ['lunch', 'dinner'] },
+  { id: '18', name: '茶饮店', emoji: '🧋', tags: ['奶茶', '饮品', '解压'], priceRange: '￥12-22', recommendedDish: '招牌奶茶少糖', weight: 1, isDrawn: false, createdAt: Date.now() + 17, mealCategories: ['tea'] },
+  { id: '19', name: '咖啡店', emoji: '☕', tags: ['咖啡', '提神', '办公'], priceRange: '￥10-28', recommendedDish: '拿铁或美式', weight: 1, isDrawn: false, createdAt: Date.now() + 18, mealCategories: ['breakfast', 'tea'] },
+  { id: '20', name: '鲜果茶 / 果汁', emoji: '🍹', tags: ['果茶', '清爽', '低负担'], priceRange: '￥12-24', recommendedDish: '鲜果茶少糖', weight: 1, isDrawn: false, createdAt: Date.now() + 19, mealCategories: ['tea'] },
+  { id: '21', name: '面包甜点店', emoji: '🥐', tags: ['烘焙', '甜点', '下午茶'], priceRange: '￥12-30', recommendedDish: '可颂+小蛋糕', weight: 1, isDrawn: false, createdAt: Date.now() + 20, mealCategories: ['breakfast', 'tea'] },
+  { id: '22', name: '糖水 / 豆花', emoji: '🍧', tags: ['甜品', '糖水', '休闲'], priceRange: '￥8-20', recommendedDish: '豆花或时令糖水', weight: 1, isDrawn: false, createdAt: Date.now() + 21, mealCategories: ['tea', 'night'] },
+  { id: '23', name: '烧烤 / 串串', emoji: '🍢', tags: ['烧烤', '聚餐', '夜宵'], priceRange: '￥35-70', recommendedDish: '肉串+烤蔬菜', weight: 1, isDrawn: false, createdAt: Date.now() + 22, mealCategories: ['dinner', 'night'] },
+  { id: '24', name: '砂锅粥 / 生滚粥', emoji: '🥣', tags: ['夜宵', '热乎', '清淡'], priceRange: '￥20-45', recommendedDish: '生滚肉片粥', weight: 1, isDrawn: false, createdAt: Date.now() + 23, mealCategories: ['dinner', 'night'] },
+  { id: '25', name: '便利店关东煮 / 便当', emoji: '🍢', tags: ['夜宵', '便利', '快速'], priceRange: '￥12-25', recommendedDish: '关东煮+饭团', weight: 1, isDrawn: false, createdAt: Date.now() + 24, mealCategories: ['lunch', 'dinner', 'night'] },
 ];
 
 function loadLocations(): BentoLocation[] {
@@ -119,15 +128,18 @@ export function useBentoStore() {
     return loc.mealCategories.includes(category);
   }
 
+  // 仅获取已开启展示的地点 (visible !== false)
+  const visibleLocations = computed(() => locations.value.filter(loc => loc.visible !== false));
+
   // 当前激活餐池的所有有效未抽地点
   const availablePool = computed(() => {
-    const categoryPool = locations.value.filter(loc => isLocationMatchingCategory(loc, selectedCategory.value));
+    const categoryPool = visibleLocations.value.filter(loc => isLocationMatchingCategory(loc, selectedCategory.value));
     const basePool = categoryPool.filter(loc => !loc.isDrawn);
     
     // 降级策略：当前餐池未抽池 -> 当前餐池全量池 -> 所有地点未抽池 -> 全量地点
     const poolToUse = basePool.length > 0 
       ? basePool 
-      : (categoryPool.length > 0 ? categoryPool : locations.value.filter(loc => !loc.isDrawn));
+      : (categoryPool.length > 0 ? categoryPool : visibleLocations.value.filter(loc => !loc.isDrawn));
 
     if (settings.value.weeklyNoRepeat !== false) {
       const mondayStr = getMondayDateString();
@@ -140,7 +152,7 @@ export function useBentoStore() {
     return poolToUse;
   });
 
-  const drawnList = computed(() => locations.value.filter(loc => loc.isDrawn));
+  const drawnList = computed(() => visibleLocations.value.filter(loc => loc.isDrawn));
   const isPoolEmpty = computed(() => availablePool.value.length === 0);
 
   function setSelectedCategory(cat: MealCategory) {
@@ -149,9 +161,9 @@ export function useBentoStore() {
 
   function getRandomLocation(category?: MealCategory): BentoLocation | null {
     const targetCat = category || selectedCategory.value;
-    const catLocations = locations.value.filter(loc => isLocationMatchingCategory(loc, targetCat));
+    const catLocations = visibleLocations.value.filter(loc => isLocationMatchingCategory(loc, targetCat));
     const basePool = catLocations.filter(loc => !loc.isDrawn);
-    const pool = basePool.length > 0 ? basePool : (catLocations.length > 0 ? catLocations : locations.value);
+    const pool = basePool.length > 0 ? basePool : (catLocations.length > 0 ? catLocations : visibleLocations.value);
     
     if (pool.length === 0) return null;
 
@@ -373,4 +385,3 @@ export function useBentoStore() {
     switchMode,
   };
 }
-

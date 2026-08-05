@@ -52,7 +52,7 @@
       </div>
 
       <div class="locations-list">
-        <div v-for="loc in locations" :key="loc.id" class="loc-card" :class="{ 'is-drawn': loc.isDrawn, 'is-selected': selectedLocIds.includes(loc.id) }">
+        <div v-for="loc in locations" :key="loc.id" class="loc-card" :class="{ 'is-drawn': loc.isDrawn, 'is-hidden': loc.visible === false, 'is-selected': selectedLocIds.includes(loc.id) }">
           <div class="card-checkbox-wrapper">
             <input type="checkbox" :value="loc.id" v-model="selectedLocIds" class="loc-checkbox" />
           </div>
@@ -60,7 +60,8 @@
           <div class="loc-info">
             <div class="loc-name-row">
               <span class="loc-name">{{ loc.name }}</span>
-              <span v-if="loc.isDrawn" class="drawn-badge">本轮已抽中</span>
+              <span v-if="loc.visible === false" class="hidden-badge">🙈 已隐藏 (不上盘)</span>
+              <span v-else-if="loc.isDrawn" class="drawn-badge">本轮已抽中</span>
             </div>
             <div class="loc-details">
               <span class="price">{{ loc.priceRange }}</span>
@@ -72,6 +73,10 @@
           </div>
 
           <div class="loc-actions">
+            <button class="icon-action vis-btn" :class="{ 'is-hidden-btn': loc.visible === false }" @click="handleToggleVisibility(loc)" :title="loc.visible === false ? '点击恢复展示 (在抽签池中显示)' : '点击设置隐藏 (不参与摇号抽签)'">
+              <Eye v-if="loc.visible !== false" :size="15" />
+              <EyeOff v-else :size="15" />
+            </button>
             <button class="icon-action edit" @click="openEditLocModal(loc)">
               <Edit3 :size="15" />
             </button>
@@ -234,6 +239,13 @@
             </div>
           </div>
 
+          <div class="form-item">
+            <label class="checkbox-label flex-row">
+              <input type="checkbox" v-model="locForm.visible" />
+              <span>在抽签池中开启展示 (取消勾选则隐藏此地点，不会参与摇号抽签)</span>
+            </label>
+          </div>
+
           <div class="modal-buttons">
             <button type="button" class="btn-secondary" @click="showLocModal = false">取消</button>
             <button type="submit" class="btn-primary">保存地点</button>
@@ -316,7 +328,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { 
-  Crown, LogOut, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet,
+  Crown, LogOut, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet, Eye, EyeOff,
   Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText 
 } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
@@ -503,9 +515,22 @@ async function handleRestoreDefault() {
 }
 
 
+async function handleToggleVisibility(loc: BentoLocation) {
+  if (settings.value.soundEnabled) soundEffects.playTick(500);
+  const nextVisible = loc.visible === false ? true : false;
+  const updated = { ...loc, visible: nextVisible };
+  if (settings.value.activeMode === 'team') {
+    await updateTeamLocation(updated);
+  } else {
+    updateLocation(updated);
+    pushToCloud(true);
+  }
+}
+
 function openAddLocModal() {
   if (settings.value.soundEnabled) soundEffects.playTick(600);
   isEditLoc.value = false;
+  selectedLocCategories.value = [];
   locForm.value = {
     id: '',
     name: '',
@@ -515,7 +540,8 @@ function openAddLocModal() {
     recommendedDish: '',
     weight: 1,
     isDrawn: false,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    visible: true
   };
   tagsInput.value = '美味, 午餐';
   showLocModal.value = true;
@@ -524,7 +550,8 @@ function openAddLocModal() {
 function openEditLocModal(loc: BentoLocation) {
   if (settings.value.soundEnabled) soundEffects.playTick(600);
   isEditLoc.value = true;
-  locForm.value = { ...loc };
+  selectedLocCategories.value = loc.mealCategories || [];
+  locForm.value = { ...loc, visible: loc.visible !== false };
   tagsInput.value = (loc.tags || []).join(', ');
   showLocModal.value = true;
 }
@@ -536,11 +563,19 @@ async function saveLoc() {
     .map(t => t.trim())
     .filter(Boolean);
 
+  const locData = {
+    ...locForm.value,
+    tags: parsedTags,
+    mealCategories: selectedLocCategories.value.length > 0 ? selectedLocCategories.value : undefined,
+    visible: locForm.value.visible !== false
+  };
+
   if (isEditLoc.value) {
     if (settings.value.activeMode === 'team') {
-      await updateTeamLocation({ ...locForm.value, tags: parsedTags });
+      await updateTeamLocation(locData);
     } else {
-      updateLocation({ ...locForm.value, tags: parsedTags });
+      updateLocation(locData);
+      pushToCloud(true);
     }
   } else {
     const value = {
@@ -549,12 +584,16 @@ async function saveLoc() {
       tags: parsedTags,
       priceRange: locForm.value.priceRange || '￥20-35',
       recommendedDish: locForm.value.recommendedDish,
+      address: locForm.value.address,
+      mealCategories: selectedLocCategories.value.length > 0 ? selectedLocCategories.value : undefined,
       weight: 1,
+      visible: locForm.value.visible !== false
     };
     if (settings.value.activeMode === 'team') {
       await addTeamLocation(value);
     } else {
       addLocation(value);
+      pushToCloud(true);
     }
   }
   showLocModal.value = false;
@@ -738,6 +777,31 @@ function handleImportFile(event: Event) {
 .loc-card.is-drawn {
   opacity: 0.6;
   background: #F3F4F6;
+}
+
+.loc-card.is-hidden {
+  opacity: 0.55;
+  background: #F8FAFC;
+  border-style: dashed;
+}
+
+.hidden-badge {
+  font-size: 0.65rem;
+  background: #F1F5F9;
+  color: #64748B;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.vis-btn {
+  background: #F1F5F9;
+  color: #475569;
+}
+
+.vis-btn.is-hidden-btn {
+  background: #FEF2F2;
+  color: #EF4444;
 }
 
 .loc-emoji {

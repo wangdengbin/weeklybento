@@ -239,6 +239,7 @@ const {
   locations: teamLocations,
   todayResult: teamTodayResult,
   roll: rollTeam,
+  canReroll,
 } = useTeamWorkspace();
 
 const currentCatMeta = computed(() => MEAL_CATEGORIES.find(c => c.key === selectedCategory.value));
@@ -268,8 +269,9 @@ function isLocationMatchingCategory(loc: BentoLocation, category: MealCategory):
 const locations = computed(() => settings.value.activeMode === 'team' ? teamLocations.value : personalLocations.value);
 const availablePool = computed(() => {
   if (settings.value.activeMode === 'team') {
-    const categoryPool = teamLocations.value.filter(loc => isLocationMatchingCategory(loc, selectedCategory.value));
-    return categoryPool.length > 0 ? categoryPool : teamLocations.value;
+    const visibleTeamLocs = teamLocations.value.filter(loc => loc.visible !== false);
+    const categoryPool = visibleTeamLocs.filter(loc => isLocationMatchingCategory(loc, selectedCategory.value));
+    return categoryPool.length > 0 ? categoryPool : visibleTeamLocs;
   }
   return personalAvailablePool.value;
 });
@@ -310,6 +312,10 @@ function handleRecordTeamResult() {
 }
 
 function handleRerollTeamResult() {
+  if (!canReroll.value) {
+    alert('团队管理员已限制普通成员重新 Roll / 重新选定！');
+    return;
+  }
   if (settings.value.soundEnabled) soundEffects.playTick(700);
   if (confirm('确定重新抽取并重置团队选定菜单吗？')) {
     forceShowMachine.value = true;

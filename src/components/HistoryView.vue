@@ -43,8 +43,11 @@
           <span class="stat-val">￥{{ stats.monthlyTotal.toFixed(2) }}</span>
         </div>
         <div class="stat-card tea-card">
-          <span class="stat-label">🧋 奶茶专账</span>
-          <span class="stat-val">{{ stats.teaCount }} 杯 · ￥{{ stats.teaTotal.toFixed(2) }}</span>
+          <span class="stat-label">🧋 咖啡/奶茶专账</span>
+          <span class="stat-val tea-stat-val">
+            <span>{{ stats.teaCount }} 杯</span>
+            <span>￥{{ stats.teaTotal.toFixed(2) }}</span>
+          </span>
         </div>
         <div class="stat-card avg-card">
           <span class="stat-label">📊 日均开销 (近30天)</span>
@@ -96,11 +99,11 @@
       <div v-for="rec in records" :key="rec.id" class="record-item glass-card" :class="{ 'is-planned': rec.status === 'planned' }">
         <div class="item-date-col">
           <span class="date-str">{{ formatDate(rec.date) }}</span>
-          <span class="time-str">{{ rec.drawnAt }}</span>
-          
-          <!-- 餐别 Tag -->
-          <span class="meal-cat-badge">
-            {{ getCatEmoji(rec.mealCategory) }} {{ getCatName(rec.mealCategory) }}
+          <span class="date-meta-row">
+            <span class="time-str">{{ rec.drawnAt }}</span>
+            <span class="meal-cat-badge">
+              {{ getCatEmoji(rec.mealCategory) }} {{ getCatName(rec.mealCategory) }}
+            </span>
           </span>
         </div>
 
@@ -178,7 +181,13 @@
 
           <div class="form-item">
             <label>地点 / 餐品名称：</label>
-            <input type="text" v-model="form.locationName" placeholder="例如：萨莉亚 (或自定义名称)" required class="input-field" />
+            <select v-if="isTeamMode" v-model="form.locationId" @change="onTeamLocationChange" class="input-field" required>
+              <option value="" disabled>请选择团队地点</option>
+              <option v-for="loc in locations" :key="loc.id" :value="loc.id">
+                {{ loc.emoji }} {{ loc.name }} {{ loc.recommendedDish ? `(${loc.recommendedDish})` : '' }}
+              </option>
+            </select>
+            <input v-else type="text" v-model="form.locationName" placeholder="例如：萨莉亚 (或自定义名称)" required class="input-field" />
           </div>
 
           <!-- 个人模式：状态与花费金额 -->
@@ -394,20 +403,30 @@ function formatDate(dateStr: string) {
   return `${month}月${day}日 (${week})`;
 }
 
+function onTeamLocationChange() {
+  const selectedLoc = locations.value.find(l => l.id === form.value.locationId);
+  if (selectedLoc) {
+    form.value.locationName = selectedLoc.name;
+    form.value.emoji = selectedLoc.emoji;
+    form.value.tags = selectedLoc.tags || [];
+  }
+}
+
 function openAddModal() {
   if (settings.value.soundEnabled) soundEffects.playTick(600);
   isEditing.value = false;
+  const defaultLoc = locations.value[0];
   form.value = {
     id: '',
     date: new Date().toISOString().slice(0, 10),
     mealCategory: 'lunch',
     status: 'confirmed',
-    locationId: locations.value[0]?.id || '',
-    locationName: locations.value[0]?.name || '',
-    emoji: locations.value[0]?.emoji || '🍱',
+    locationId: defaultLoc?.id || '',
+    locationName: defaultLoc?.name || '',
+    emoji: defaultLoc?.emoji || '🍱',
     note: '',
     cost: undefined,
-    tags: locations.value[0]?.tags || []
+    tags: defaultLoc?.tags || []
   };
   showModal.value = true;
 }
@@ -430,14 +449,12 @@ function openEditModal(rec: DailyRecord) {
   showModal.value = true;
 }
 
-
-
 async function saveRecord() {
   if (settings.value.soundEnabled) soundEffects.playTick(800);
   try {
     if (isTeamMode.value) {
       if (!form.value.locationId) {
-        alert('请选择地点');
+        alert('请先选择团队地点');
         return;
       }
       await addOrUpdateTeamRecord(form.value.locationId, form.value.date, form.value.note);
@@ -507,14 +524,17 @@ async function confirmDelete(id: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .header-title {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 1.1rem;
   font-weight: 800;
+  min-width: 0;
 }
 
 .text-orange {
@@ -544,6 +564,7 @@ async function confirmDelete(id: string) {
 .add-rec-btn {
   padding: 6px 12px;
   font-size: 0.82rem;
+  flex-shrink: 0;
 }
 
 .empty-state {
@@ -573,19 +594,30 @@ async function confirmDelete(id: string) {
 }
 
 .record-item {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) auto;
+  grid-template-areas: "date main actions";
+  align-items: start;
   padding: 14px 16px;
   gap: 14px;
 }
 
 .item-date-col {
+  grid-area: date;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 68px;
+  align-items: flex-start;
+  min-width: 0;
   padding-right: 12px;
   border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.date-meta-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 3px;
 }
 
 .date-str {
@@ -600,10 +632,12 @@ async function confirmDelete(id: string) {
 }
 
 .item-main-col {
+  grid-area: main;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .food-line {
@@ -621,13 +655,16 @@ async function confirmDelete(id: string) {
 .food-name {
   font-size: 1.05rem;
   font-weight: 800;
-  white-space: nowrap;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .food-note {
   font-size: 0.8rem;
   color: var(--text-muted);
   font-style: italic;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .tags-wrap {
@@ -646,9 +683,13 @@ async function confirmDelete(id: string) {
 }
 
 .admin-actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
+  max-width: 112px;
 }
 
 .action-btn {
@@ -750,6 +791,13 @@ async function confirmDelete(id: string) {
   color: #DB2777;
 }
 
+.tea-stat-val {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
 .ratio-bar-row {
   display: flex;
   flex-direction: column;
@@ -844,6 +892,7 @@ async function confirmDelete(id: string) {
   padding: 6px 10px;
   border-radius: 8px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .meal-cat-radios {
@@ -1004,5 +1053,124 @@ async function confirmDelete(id: string) {
 
 .budget-progress-fill.over-budget {
   background: #EF4444;
+}
+
+@media (max-width: 430px) {
+  .history-container {
+    gap: 12px;
+    padding: 12px;
+    padding-bottom: 90px;
+  }
+
+  .history-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-title {
+    font-size: 1rem;
+  }
+
+  .mode-badge {
+    margin-left: 28px;
+  }
+
+  .add-rec-btn {
+    width: 100%;
+  }
+
+  .dash-header-row,
+  .expired-planned-banner,
+  .budget-info-row {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .expired-planned-banner,
+  .budget-info-row {
+    flex-direction: column;
+  }
+
+  .main-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .record-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date actions"
+      "main main";
+    gap: 10px 12px;
+    padding: 13px 14px;
+  }
+
+  .item-date-col {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border-right: 0;
+  }
+
+  .date-meta-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 0;
+  }
+
+  .admin-actions {
+    max-width: none;
+  }
+
+  .food-line {
+    align-items: flex-start;
+  }
+
+  .food-name {
+    flex: 1 1 calc(100% - 34px);
+  }
+
+  .modal-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .modal-buttons > button {
+    min-width: 0;
+    padding-inline: 12px;
+  }
+}
+
+@media (max-width: 350px) {
+  .dash-header-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .export-csv-btn {
+    justify-content: center;
+  }
+
+  .main-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-card:first-child {
+    grid-column: auto;
+  }
+
+  .record-item {
+    grid-template-columns: 1fr;
+    grid-template-areas: "date" "main" "actions";
+  }
+
+  .admin-actions {
+    justify-content: flex-start;
+  }
 }
 </style>

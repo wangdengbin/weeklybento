@@ -136,6 +136,33 @@
                   </div>
                 </div>
 
+                <!-- 🛡️ 团队权限控制配置 (仅管理人员可见) -->
+                <div v-if="canManage" class="perms-box">
+                  <div class="perms-header">
+                    <Shield :size="13" />
+                    <span>🛡️ 团队成员权限控制设置</span>
+                  </div>
+                  <div class="perms-list">
+                    <label class="perm-item-label">
+                      <input 
+                        type="checkbox" 
+                        :checked="teamPermissions.allowMemberReroll !== false" 
+                        @change="handleToggleRerollPerm" 
+                      />
+                      <span>允许成员重新 Roll / 重新选定</span>
+                    </label>
+
+                    <label class="perm-item-label">
+                      <input 
+                        type="checkbox" 
+                        :checked="teamPermissions.allowMemberEditLocation !== false" 
+                        @change="handleToggleEditLocationPerm" 
+                      />
+                      <span>允许成员编辑 / 配置地点池</span>
+                    </label>
+                  </div>
+                </div>
+
                 <div class="team-card-actions">
                   <button v-if="t.role === 'owner'" class="danger-mini-action" type="button" :disabled="isLoading" @click="handleDeleteTeam(t)">
                     <Trash2 :size="14" />
@@ -214,7 +241,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw } from 'lucide-vue-next';
+import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw, Shield } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace, getErrorMessage } from '../composables/useTeamWorkspace';
 import { useAuth } from '../composables/useAuth';
@@ -224,7 +251,19 @@ const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits(['close', 'open-auth-modal']);
 const { locations: personalLocations, switchMode } = useBentoStore();
 const { isAnonymous } = useAuth();
-const { team, myTeams, members, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl, buildInviteUrl, openTeam, deleteTeam, leaveTeam, switchActiveTeam } = useTeamWorkspace();
+const { team, myTeams, members, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl, buildInviteUrl, openTeam, deleteTeam, leaveTeam, switchActiveTeam, teamPermissions, updateTeamPermissions } = useTeamWorkspace();
+
+function handleToggleRerollPerm(e: Event) {
+  const target = e.target as HTMLInputElement;
+  updateTeamPermissions({ allowMemberReroll: target.checked });
+  if (soundEffects) soundEffects.playTick(600);
+}
+
+function handleToggleEditLocationPerm(e: Event) {
+  const target = e.target as HTMLInputElement;
+  updateTeamPermissions({ allowMemberEditLocation: target.checked });
+  if (soundEffects) soundEffects.playTick(600);
+}
 
 const actionMode = ref<'create' | 'join'>('create');
 const teamName = ref('');
@@ -573,6 +612,36 @@ async function handleLeaveTeam(t: { id: string; name: string }) {
 }
 .share-btn-row { display: flex; width: 100%; }
 .share-main-btn { width: 100%; font-size: 12px; min-height: 32px; }
+
+.perms-box {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 10px;
+}
+.perms-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 8px;
+}
+.perms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.perm-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
 
 .team-card-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .danger-mini-action {

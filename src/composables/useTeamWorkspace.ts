@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import type { BentoLocation, DailyRecord, TeamRollResult } from '../types';
+import type { BentoLocation, DailyRecord, TeamPermissions, TeamRollResult } from '../types';
 
 type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -54,18 +54,62 @@ function today() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
 }
 
+const defaultPermissions: TeamPermissions = {
+  allowMemberReroll: true,
+  allowMemberEditLocation: true,
+};
+
+const teamPermissions = ref<TeamPermissions>({ ...defaultPermissions });
+
+function loadTeamPermissions(teamId?: string) {
+  if (!teamId) {
+    teamPermissions.value = { ...defaultPermissions };
+    return;
+  }
+  try {
+    const key = `weekly_bento_team_perms_${teamId}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      teamPermissions.value = { ...defaultPermissions, ...JSON.parse(raw) };
+      return;
+    }
+  } catch (e) {}
+  teamPermissions.value = { ...defaultPermissions };
+}
+
+function updateTeamPermissions(newPerms: Partial<TeamPermissions>) {
+  if (!team.value) return;
+  teamPermissions.value = { ...teamPermissions.value, ...newPerms };
+  try {
+    const key = `weekly_bento_team_perms_${team.value.id}`;
+    localStorage.setItem(key, JSON.stringify(teamPermissions.value));
+  } catch (e) {}
+}
+
+function prepareTags(tags: string[] = [], visible?: boolean): string[] {
+  const clean = tags.filter(t => t !== '__hidden__');
+  if (visible === false) {
+    clean.push('__hidden__');
+  }
+  return clean;
+}
+
 function mapLocation(row: any): BentoLocation {
+  const rawTags: string[] = row.tags || [];
+  const isHidden = rawTags.includes('__hidden__') || row.visible === false;
+  const cleanTags = rawTags.filter(t => t !== '__hidden__');
   return {
     id: row.id,
     name: row.name,
     emoji: row.emoji,
-    tags: row.tags || [],
+    tags: cleanTags,
     priceRange: row.price_range || '',
     recommendedDish: row.recommended_dish || undefined,
     weight: row.weight || 1,
     isDrawn: false,
     createdAt: new Date(row.created_at).getTime(),
     mealCategories: row.meal_categories || row.mealCategories || undefined,
+    visible: !isHidden,
   };
 }
 
@@ -219,6 +263,7 @@ async function loadWorkspace() {
   }
 
   await fetchTeamMembers();
+  loadTeamPermissions(team.value.id);
 }
 
 function startRealtime() {
@@ -364,8 +409,9 @@ async function roll(force = false) {
 
 async function addLocation(value: Omit<BentoLocation, 'id' | 'isDrawn' | 'createdAt'>) {
   if (!supabase || !team.value) throw new Error('请先创建或加入团队');
+  const tagsToSave = prepareTags(value.tags, value.visible);
   const { error } = await supabase.from('team_locations').insert({
-    team_id: team.value.id, name: value.name, emoji: value.emoji, tags: value.tags,
+    team_id: team.value.id, name: value.name, emoji: value.emoji, tags: tagsToSave,
     price_range: value.priceRange, recommended_dish: value.recommendedDish || null, weight: value.weight,
     meal_categories: value.mealCategories || null,
   });
@@ -375,8 +421,9 @@ async function addLocation(value: Omit<BentoLocation, 'id' | 'isDrawn' | 'create
 
 async function updateLocation(value: BentoLocation) {
   if (!supabase || !team.value) throw new Error('请先创建或加入团队');
+  const tagsToSave = prepareTags(value.tags, value.visible);
   const { error } = await supabase.from('team_locations').update({
-    name: value.name, emoji: value.emoji, tags: value.tags, price_range: value.priceRange,
+    name: value.name, emoji: value.emoji, tags: tagsToSave, price_range: value.priceRange,
     recommended_dish: value.recommendedDish || null, weight: value.weight,
     meal_categories: value.mealCategories || null,
   }).eq('id', value.id).eq('team_id', team.value.id);
@@ -412,7 +459,7 @@ async function batchAddLocations(values: Omit<BentoLocation, 'id' | 'isDrawn' | 
     team_id: team.value!.id,
     name: value.name,
     emoji: value.emoji || '🍱',
-    tags: value.tags || [],
+    tags: prepareTags(value.tags, value.visible),
     price_range: value.priceRange || '',
     recommended_dish: value.recommendedDish || null,
     weight: value.weight || 1,
@@ -533,6 +580,16 @@ async function deleteTeamRecord(id: string) {
 const canManage = computed(() => team.value?.role === 'owner' || team.value?.role === 'admin');
 const isOwner = computed(() => team.value?.role === 'owner');
 
+const canReroll = computed(() => {
+  if (canManage.value) return true;
+  return teamPermissions.value.allowMemberReroll !== false;
+});
+
+const canEditLocation = computed(() => {
+  if (canManage.value) return true;
+  return teamPermissions.value.allowMemberEditLocation !== false;
+});
+
 export function useTeamWorkspace() {
   return {
     isConfigured: isSupabaseConfigured,
@@ -547,6 +604,10 @@ export function useTeamWorkspace() {
     pendingInviteUrl,
     canManage,
     isOwner,
+    canReroll,
+    canEditLocation,
+    teamPermissions,
+    updateTeamPermissions,
     initialize,
     fetchMyTeams,
     fetchTeamMembers,

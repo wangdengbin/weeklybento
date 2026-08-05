@@ -1,10 +1,10 @@
 <template>
   <div v-if="visible" class="modal-overlay" @click.self="closeModal">
     <div class="modal-content admin-modal">
-      <div v-if="settings.activeMode === 'team' && !canManageTeam" class="login-box">
+      <div v-if="settings.activeMode === 'team' && !canEditLocation" class="login-box">
         <div class="lock-icon-wrap"><ShieldAlert :size="36" class="lock-icon" /></div>
         <h3 class="login-title">没有管理权限</h3>
-        <p class="login-desc">只有团队所有者或管理员可以修改团队菜单。</p>
+        <p class="login-desc">团队管理员已限制普通成员编辑地点池。</p>
         <button type="button" class="btn-secondary" @click="closeModal">关闭</button>
       </div>
 
@@ -59,7 +59,7 @@ const emit = defineEmits(['close']);
 
 const { isAdminLoggedIn, verifyPassword, grantAdminSession } = useAdmin();
 const { settings } = useBentoStore();
-const { canManage: canManageTeam } = useTeamWorkspace();
+const { canEditLocation } = useTeamWorkspace();
 
 const passwordInput = ref('');
 const errorMsg = ref('');
@@ -67,7 +67,7 @@ const pwdInputRef = ref<HTMLInputElement | null>(null);
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    if (settings.value.activeMode === 'team' && canManageTeam.value) {
+    if (settings.value.activeMode === 'team' && canEditLocation.value) {
       grantAdminSession();
     }
     passwordInput.value = '';

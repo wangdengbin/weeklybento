@@ -12,7 +12,7 @@ export interface MealCategoryInfo {
 export const MEAL_CATEGORIES: MealCategoryInfo[] = [
   { key: 'breakfast', name: '早餐池', emoji: '🌅', timeRange: '06:00-10:30', description: '快捷热乎的早晨能量' },
   { key: 'lunch', name: '午餐池', emoji: '☀️', timeRange: '10:30-14:00', description: '高效丰盛的工作日正餐' },
-  { key: 'tea', name: '奶茶/下午茶', emoji: '🧋', timeRange: '14:00-17:00', description: '解压续命的饮品甜点' },
+  { key: 'tea', name: '咖啡/奶茶', emoji: '🧋', timeRange: '14:00-17:00', description: '提神解压的咖啡茶饮' },
   { key: 'dinner', name: '晚餐池', emoji: '🌙', timeRange: '17:00-21:00', description: '休闲舒适的傍晚聚餐' },
   { key: 'night', name: '夜宵池', emoji: '🌌', timeRange: '21:00-06:00', description: '深夜解馋的特调好味' },
 ];
@@ -30,6 +30,12 @@ export interface BentoLocation {
   mealCategories?: MealCategory[]; // 支持的餐池分类，不传默认全选/包含午餐
   address?: string; // 详细地址（如：“科技园路 88 号 2 楼”）
   mapUrl?: string; // 自定义导航跳转链接
+  visible?: boolean; // 是否在抽签池中展示 (默认为 true)
+}
+
+export interface TeamPermissions {
+  allowMemberReroll: boolean; // 是否允许团队普通成员重新 Roll
+  allowMemberEditLocation: boolean; // 是否允许团队普通成员编辑地点池
 }
 
 export interface DailyRecord {
@@ -80,4 +86,3 @@ export interface AppSettings {
   cloudSync?: CloudSyncConfig; // 兼容逻辑
   monthlyBudget?: number; // 月伙食预算 (0 或 undefined 表示未设置)
 }
-
