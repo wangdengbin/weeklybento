@@ -110,9 +110,19 @@ const latestResult = ref<{ location: BentoLocation; fortune: string } | null>(nu
 // 应用启动时自动从云端获取最新数据
 onMounted(async () => {
   await initialize();
-  if (team.value) settings.value.activeMode = 'team';
-  if (!team.value && new URL(window.location.href).searchParams.has('team')) {
-    showTeamModal.value = true;
+
+  const searchParams = new URL(window.location.href).searchParams;
+  const hasInviteOrTeamParam = searchParams.has('invite') || searchParams.has('team');
+
+  if (hasInviteOrTeamParam) {
+    if (team.value) {
+      settings.value.activeMode = 'team';
+    } else {
+      showTeamModal.value = true;
+    }
+  } else {
+    // 点击非邀请链接进入，默认展示个人独享模式
+    settings.value.activeMode = 'personal';
   }
 });
 

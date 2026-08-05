@@ -253,7 +253,19 @@ function handleClearExpiredPlanned() {
 }
 
 const isTeamMode = computed(() => settings.value.activeMode === 'team' && Boolean(team.value));
-const records = computed(() => isTeamMode.value ? teamHistory.value : personalRecords.value);
+const records = computed(() => {
+  const base = isTeamMode.value ? teamHistory.value : personalRecords.value;
+  return [...base].sort((a, b) => {
+    // 实际日期降序 (YYYY-MM-DD)
+    const dateCompare = b.date.localeCompare(a.date);
+    if (dateCompare !== 0) return dateCompare;
+    
+    // 日期相同时，按时间降序排序 (HH:MM)
+    const timeA = a.drawnAt || '';
+    const timeB = b.drawnAt || '';
+    return timeB.localeCompare(timeA);
+  });
+});
 const locations = computed(() => isTeamMode.value ? teamLocations.value : personalLocations.value);
 
 const canAddRecord = computed(() => true); // 允许人人随时记账补录
@@ -326,14 +338,14 @@ const budgetStatusText = computed(() => {
 });
 
 function exportCSV() {
-  if (personalRecords.value.length === 0) {
+  if (records.value.length === 0) {
     alert('暂无饮食记账记录可导出');
     return;
   }
 
   let csvContent = '\uFEFF日期,餐别,地点/餐品,打卡状态,实付金额(元),备注,标签\n';
 
-  personalRecords.value.forEach(r => {
+  records.value.forEach(r => {
     const catName = getCatName(r.mealCategory);
     const statusText = r.status === 'planned' ? '预选计划' : '已打卡';
     const costText = r.cost !== undefined ? r.cost.toFixed(2) : '0';

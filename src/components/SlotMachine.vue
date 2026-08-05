@@ -150,6 +150,17 @@
             </div>
           </button>
 
+          <!-- 弱化手选入口，优先级低 -->
+          <div class="secondary-actions" v-if="!isRolling">
+            <button 
+              type="button" 
+              class="btn-text-link"
+              @click="openManualSelect"
+            >
+              👋 不想Roll？手动选择一个
+            </button>
+          </div>
+
           <p class="anti-repeat-tip">
             ✨ {{ settings.activeMode === 'team' ? '午餐搭子协同：任何人完成 Roll 后搭子圈全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
           </p>
@@ -208,12 +219,61 @@
         </div>
       </div>
     </template>
+
+    <!-- 手动选择地点弹窗 -->
+    <div v-if="showManualSelectModal" class="manual-select-modal-overlay" @click.self="closeManualSelect">
+      <div class="manual-select-modal glass-card">
+        <div class="modal-header">
+          <h3>选择今日{{ currentCatMeta?.name || '地点' }}</h3>
+          <button class="close-btn" @click="closeManualSelect">×</button>
+        </div>
+        
+        <!-- 搜索框 -->
+        <div class="search-box">
+          <div class="search-input-wrapper">
+            <Search :size="16" class="search-icon" />
+            <input 
+              type="text" 
+              v-model="searchQuery" 
+              placeholder="搜索店名、标签..." 
+              class="search-input"
+            />
+          </div>
+        </div>
+
+        <!-- 候选列表 -->
+        <div class="location-list">
+          <div 
+            v-for="loc in filteredLocations" 
+            :key="loc.id" 
+            class="location-item"
+            :class="{ 'is-disabled': isSubmittingManual }"
+            @click="selectLocationManually(loc)"
+          >
+            <span class="loc-emoji">{{ loc.emoji || '🍱' }}</span>
+            <div class="loc-details">
+              <span class="loc-name">{{ loc.name }}</span>
+              <div class="loc-tags">
+                <span v-for="tag in loc.tags" :key="tag" class="loc-tag">#{{ tag }}</span>
+                <span class="loc-price" v-if="loc.priceRange">{{ loc.priceRange }}</span>
+              </div>
+            </div>
+            <button class="btn-select-confirm" :disabled="isSubmittingManual">
+              {{ isSubmittingManual ? '提交中...' : '选择' }}
+            </button>
+          </div>
+          <div v-if="filteredLocations.length === 0" class="empty-list-tip">
+            没有找到匹配的地点~
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck } from 'lucide-vue-next';
+import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck, Search } from 'lucide-vue-next';
 import confetti from 'canvas-confetti';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
@@ -241,6 +301,7 @@ const {
   todayResult: teamTodayResult,
   roll: rollTeam,
   canReroll,
+  addOrUpdateTeamRecord,
 } = useTeamWorkspace();
 
 const currentCatMeta = computed(() => MEAL_CATEGORIES.find(c => c.key === selectedCategory.value));
@@ -284,6 +345,57 @@ const isRolling = ref(false);
 const forceShowMachine = ref(false);
 
 const todayStr = computed(() => new Date().toISOString().slice(0, 10));
+
+// 手动选择状态与方法
+const showManualSelectModal = ref(false);
+const searchQuery = ref('');
+const isSubmittingManual = ref(false);
+
+const currentCategoryLocations = computed(() => {
+  return locations.value.filter(loc => loc.visible !== false && isLocationMatchingCategory(loc, selectedCategory.value));
+});
+
+const filteredLocations = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return currentCategoryLocations.value;
+  return currentCategoryLocations.value.filter(loc => 
+    loc.name.toLowerCase().includes(query) || 
+    (loc.tags && loc.tags.some(tag => tag.toLowerCase().includes(query)))
+  );
+});
+
+function openManualSelect() {
+  searchQuery.value = '';
+  showManualSelectModal.value = true;
+}
+
+function closeManualSelect() {
+  showManualSelectModal.value = false;
+}
+
+async function selectLocationManually(loc: BentoLocation) {
+  if (isSubmittingManual.value) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(800);
+
+  if (settings.value.activeMode === 'team') {
+    isSubmittingManual.value = true;
+    try {
+      await addOrUpdateTeamRecord(loc.id, todayStr.value, '团队手动选定');
+      showManualSelectModal.value = false;
+      forceShowMachine.value = false;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : '团队手动选定失败');
+    } finally {
+      isSubmittingManual.value = false;
+    }
+  } else {
+    showManualSelectModal.value = false;
+    emit('roll-complete', {
+      location: loc,
+      fortune: '手选精选，美味直达！'
+    });
+  }
+}
 
 const hasTodayTeamResult = computed(() => {
   return settings.value.activeMode === 'team' &&
@@ -1064,5 +1176,236 @@ function handleResetPool() {
   font-size: 0.9rem;
   font-weight: 800;
   color: #10B981;
+}
+
+/* 手动选择入口样式 */
+.secondary-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: -4px;
+}
+
+.btn-text-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn-text-link:hover {
+  color: var(--primary);
+  background: rgba(255, 107, 53, 0.05);
+}
+
+/* 手动选择弹窗 */
+.manual-select-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.manual-select-modal {
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFFDFB 100%);
+  border: 1px solid rgba(255, 237, 213, 0.8);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 75vh;
+  animation: scaleIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px dashed #E2E8F0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1E293B;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: #94A3B8;
+  cursor: pointer;
+  transition: color 0.2s;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #64748B;
+}
+
+.search-box {
+  padding: 10px 18px;
+  background: #FAFAFA;
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: #94A3B8;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1.5px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  outline: none;
+  transition: all 0.2s ease;
+  font-weight: 600;
+}
+
+.search-input:focus {
+  border-color: var(--primary);
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
+}
+
+.location-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.location-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.location-item:hover {
+  background: #FFF7ED;
+  border-color: #FDBA74;
+  transform: translateY(-1px);
+}
+
+.location-item.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loc-emoji {
+  font-size: 1.4rem;
+}
+
+.loc-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.loc-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1E293B;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.loc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.loc-tag {
+  font-size: 0.68rem;
+  color: #64748B;
+  background: #F1F5F9;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.loc-price {
+  font-size: 0.68rem;
+  color: #EA580C;
+  background: #FFEDD5;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.btn-select-confirm {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #FFFFFF;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.location-item:hover .btn-select-confirm {
+  background: var(--primary);
+  color: #FFFFFF;
+  border-color: var(--primary);
+}
+
+.empty-list-tip {
+  text-align: center;
+  padding: 20px 0;
+  font-size: 0.8rem;
+  color: #94A3B8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 </style>
