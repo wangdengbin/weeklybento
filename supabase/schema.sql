@@ -1,6 +1,7 @@
 create extension if not exists pgcrypto;
 
-create table public.teams (
+-- 本脚本完全幂等：无论全新或已有数据库，都可重复完整执行。
+create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique default encode(gen_random_bytes(6), 'hex'),
   name text not null check (char_length(name) between 1 and 40),
@@ -9,7 +10,7 @@ create table public.teams (
   created_at timestamptz not null default now()
 );
 
-create table public.team_members (
+create table if not exists public.team_members (
   team_id uuid not null references public.teams(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null check (role in ('owner', 'admin', 'member', 'viewer')),
@@ -17,7 +18,7 @@ create table public.team_members (
   primary key (team_id, user_id)
 );
 
-create table public.team_locations (
+create table if not exists public.team_locations (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
   name text not null check (char_length(name) between 1 and 80),
@@ -29,7 +30,7 @@ create table public.team_locations (
   created_at timestamptz not null default now()
 );
 
-create table public.team_draws (
+create table if not exists public.team_draws (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
   location_id uuid not null references public.team_locations(id) on delete cascade,
@@ -40,9 +41,9 @@ create table public.team_draws (
   unique (team_id, business_date)
 );
 
-create index team_locations_team_id_idx on public.team_locations(team_id);
-create index team_draws_team_date_idx on public.team_draws(team_id, business_date desc);
-create index team_members_user_id_idx on public.team_members(user_id);
+create index if not exists team_locations_team_id_idx on public.team_locations(team_id);
+create index if not exists team_draws_team_date_idx on public.team_draws(team_id, business_date desc);
+create index if not exists team_members_user_id_idx on public.team_members(user_id);
 
 create or replace function public.is_team_member(target_team_id uuid)
 returns boolean language sql stable security definer set search_path = public
@@ -64,22 +65,34 @@ alter table public.team_members enable row level security;
 alter table public.team_locations enable row level security;
 alter table public.team_draws enable row level security;
 
+drop policy if exists "members read teams" on public.teams;
 create policy "members read teams" on public.teams for select using (public.is_team_member(id));
+drop policy if exists "owners delete teams" on public.teams;
 create policy "owners delete teams" on public.teams for delete using (
   exists (
     select 1 from team_members
     where team_id = id and user_id = auth.uid() and role = 'owner'
   )
 );
+drop policy if exists "members read memberships" on public.team_members;
 create policy "members read memberships" on public.team_members for select using (public.is_team_member(team_id));
+drop policy if exists "members delete self membership" on public.team_members;
 create policy "members delete self membership" on public.team_members for delete using (user_id = auth.uid());
+drop policy if exists "members read locations" on public.team_locations;
 create policy "members read locations" on public.team_locations for select using (public.is_team_member(team_id));
+drop policy if exists "members insert locations" on public.team_locations;
 create policy "members insert locations" on public.team_locations for insert with check (public.is_team_member(team_id));
+drop policy if exists "members update locations" on public.team_locations;
 create policy "members update locations" on public.team_locations for update using (public.is_team_member(team_id));
+drop policy if exists "members delete locations" on public.team_locations;
 create policy "members delete locations" on public.team_locations for delete using (public.is_team_member(team_id));
+drop policy if exists "members read draws" on public.team_draws;
 create policy "members read draws" on public.team_draws for select using (public.is_team_member(team_id));
+drop policy if exists "members insert draws" on public.team_draws;
 create policy "members insert draws" on public.team_draws for insert with check (public.is_team_member(team_id));
+drop policy if exists "members update draws" on public.team_draws;
 create policy "members update draws" on public.team_draws for update using (public.is_team_member(team_id));
+drop policy if exists "members delete draws" on public.team_draws;
 create policy "members delete draws" on public.team_draws for delete using (public.is_team_member(team_id));
 
 create or replace function public.create_team(p_name text, p_locations jsonb default '[]'::jsonb)
@@ -248,7 +261,7 @@ begin
 
   if current_draw.id is null or p_force then
     -- 本周起点：周一 (Asia/Shanghai 业务日期)
-    week_start := business_day - ((extract(dow from business_day) + 6) % 7);
+    week_start := business_day - ((extract(dow from business_day)::int + 6) % 7);
     if (select count(*) from team_locations where team_id = p_team_id and id not in (
       select location_id from team_draws where team_id = p_team_id and business_date >= week_start
     )) = 0 then
@@ -310,5 +323,7 @@ revoke execute on function public.get_team_members(uuid) from public, anon;
 revoke execute on function public.rotate_team_invite(uuid) from public, anon;
 revoke execute on function public.roll_team(uuid, boolean) from public, anon;
 
+alter publication supabase_realtime drop table public.team_locations;
 alter publication supabase_realtime add table public.team_locations;
+alter publication supabase_realtime drop table public.team_draws;
 alter publication supabase_realtime add table public.team_draws;

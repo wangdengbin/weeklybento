@@ -251,15 +251,17 @@ function startRealtime() {
     .subscribe();
 }
 
-function setTeamUrl(publicId: string) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('team', publicId);
-  url.searchParams.delete('invite');
-  window.history.replaceState({}, '', url);
+function setTeamUrl(publicId: string, syncUrl = true) {
+  if (syncUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('team', publicId);
+    url.searchParams.delete('invite');
+    window.history.replaceState({}, '', url);
+  }
   localStorage.setItem('weekly_bento_active_team', publicId);
 }
 
-async function openTeam(publicId: string, inviteToken?: string) {
+async function openTeam(publicId: string, inviteToken?: string, syncUrl = true) {
   if (!supabase) throw new Error('尚未配置 Supabase');
   await ensureAnonymousSession();
   if (inviteToken) {
@@ -272,7 +274,7 @@ async function openTeam(publicId: string, inviteToken?: string) {
   const { data, error } = await supabase.rpc(rpcName, params);
   if (error) throw error;
   team.value = data as TeamWorkspace;
-  setTeamUrl(team.value.public_id);
+  setTeamUrl(team.value.public_id, syncUrl);
   await loadWorkspace();
   startRealtime();
 }
@@ -282,7 +284,7 @@ async function switchActiveTeam(publicId: string) {
   isLoading.value = true;
   errorMessage.value = '';
   try {
-    await openTeam(publicId);
+    await openTeam(publicId, undefined, true);
     await fetchMyTeams();
   } catch (error) {
     errorMessage.value = getErrorMessage(error);
@@ -300,15 +302,18 @@ async function initialize() {
     await fetchMyTeams();
 
     const url = new URL(window.location.href);
-    const publicId = url.searchParams.get('team') || localStorage.getItem('weekly_bento_active_team');
+    const urlPublicId = url.searchParams.get('team');
     const invite = url.searchParams.get('invite') || undefined;
-    if (invite && publicId) {
-      await openTeam(publicId, invite);
+    const storedPublicId = localStorage.getItem('weekly_bento_active_team');
+
+    const targetPublicId = urlPublicId || storedPublicId || (myTeams.value.length > 0 ? myTeams.value[0].public_id : null);
+    const shouldSyncUrl = !!(urlPublicId || invite);
+
+    if (invite && urlPublicId) {
+      await openTeam(urlPublicId, invite, true);
       await fetchMyTeams();
-    } else if (publicId) {
-      await openTeam(publicId);
-    } else if (myTeams.value.length > 0) {
-      await openTeam(myTeams.value[0].public_id);
+    } else if (targetPublicId) {
+      await openTeam(targetPublicId, undefined, shouldSyncUrl);
     }
   } catch (error) {
     errorMessage.value = getErrorMessage(error);

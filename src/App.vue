@@ -109,32 +109,26 @@ const { initializePersonalSync } = useCloudSync();
 
 const latestResult = ref<{ location: BentoLocation; fortune: string } | null>(null);
 
-// 记录页面刚打开时的原始 URL 参数，防止 initialize() 内部使用 replaceState 自动注入 team 参数干扰判定
+// 记录页面刚打开时的原始 URL 参数
 const initialSearchParams = new URL(window.location.href).searchParams;
 const isInviteOrTeamLink = initialSearchParams.has('invite') || initialSearchParams.has('team');
 
 // 应用启动时自动从云端获取最新数据
 onMounted(async () => {
+  // 1. 同步确定初始模式，避免网络延迟后出现模式颠簸
+  if (isInviteOrTeamLink) {
+    settings.value.activeMode = 'team';
+  } else if (!initialSearchParams.has('team')) {
+    // 普通访问默认进入个人独享模式
+    settings.value.activeMode = 'personal';
+  }
+
+  // 2. 异步初始化搭子圈数据与个人云同步
   await initialize();
   await initializePersonalSync();
 
-  if (isInviteOrTeamLink) {
-    if (team.value) {
-      settings.value.activeMode = 'team';
-    } else {
-      showTeamModal.value = true;
-    }
-  } else {
-    // 刚进入时非邀请链接，默认展示个人独享模式
-    settings.value.activeMode = 'personal';
-
-    // 清除可能在 initialize 时由 openTeam 自动注入到地址栏的 team/invite 参数，保持 URL 干净
-    const cleanUrl = new URL(window.location.href);
-    if (cleanUrl.searchParams.has('team') || cleanUrl.searchParams.has('invite')) {
-      cleanUrl.searchParams.delete('team');
-      cleanUrl.searchParams.delete('invite');
-      window.history.replaceState({}, '', cleanUrl);
-    }
+  if (isInviteOrTeamLink && !team.value) {
+    showTeamModal.value = true;
   }
 });
 

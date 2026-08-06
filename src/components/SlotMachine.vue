@@ -14,229 +14,231 @@
       </button>
     </div>
 
-    <!-- 团队模式：今日已有团队选定结果卡片 -->
-    <div v-if="hasTodayTeamResult && !forceShowMachine" class="team-result-card glass-card">
-      <div class="team-card-header">
-        <span class="team-badge">👥 午餐搭子模式</span>
-        <span class="team-status-tag">今日已选定</span>
-      </div>
-
-      <div class="team-card-body">
-        <div class="big-emoji-wrap">{{ todayTeamResult?.emoji }}</div>
-        <h2 class="team-location-title">{{ todayTeamResult?.locationName }}</h2>
-        
-        <div class="tags-row" v-if="todayTeamResult?.tags?.length">
-          <span v-for="tag in todayTeamResult.tags" :key="tag" class="tag-pill"># {{ tag }}</span>
-          <span class="price-tag" v-if="todayTeamResult?.priceRange">{{ todayTeamResult.priceRange }}</span>
+    <transition name="fade-switch" mode="out-in">
+      <!-- 团队模式：今日已有团队选定结果卡片 -->
+      <div v-if="hasTodayTeamResult && !forceShowMachine" key="team-result" class="team-result-card glass-card">
+        <div class="team-card-header">
+          <span class="team-badge">👥 午餐搭子模式</span>
+          <span class="team-status-tag">今日已选定</span>
         </div>
 
-        <div class="recommend-box" v-if="todayTeamResult?.recommendedDish">
-          <span class="box-label">💡 推荐菜品：</span>
-          <span class="box-text">{{ todayTeamResult.recommendedDish }}</span>
-        </div>
-
-        <div class="team-meta-info">
-          ⏰ 抽取时间：{{ todayTeamResult?.rolledAt }} · {{ todayTeamResult?.rolledBy || '搭子成员' }} 已锁定今日菜单
-        </div>
-      </div>
-
-      <div class="team-card-actions">
-        <button class="btn-primary" @click="handleRecordTeamResult">
-          <Check :size="18" />
-          <span>记录为我的今日日志</span>
-        </button>
-        <button class="btn-secondary" @click="handleRerollTeamResult">
-          <RotateCcw :size="18" />
-          <span>重新选定 (重抽并同步搭子圈)</span>
-        </button>
-      </div>
-    </div>
-
-    <template v-else>
-      <!-- 池子进度提示卡 -->
-      <div class="pool-status-card">
-        <div class="status-info">
-          <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
-          <span class="status-text">
-            <template v-if="settings.activeMode === 'team'">[👥 搭子待抽池] </template>
-            {{ currentCatMeta?.emoji }} {{ currentCatMeta?.name }}待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
-          </span>
-
-          <label class="weekly-toggle-badge" title="开启后本周 (周一至周日) 已抽中过的餐厅不会再次重抽">
-            <input type="checkbox" v-model="settings.weeklyNoRepeat" class="weekly-checkbox" />
-            <span>📅 按周不重复</span>
-          </label>
-        </div>
-        <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
-          <RotateCcw :size="13" />
-          重置池子 (已吃{{ drawnList.length }})
-        </button>
-      </div>
-
-      <!-- 主老虎机机器 Frame -->
-      <div class="machine-frame glass-card">
-        <div class="machine-header">
-          <Sparkles class="sparkle-icon" :size="18" />
-          <span>{{ settings.activeMode === 'team' ? 'BUDDY RANDOM ROLL' : 'BENTO RANDOM ROLL' }}</span>
-          <Sparkles class="sparkle-icon" :size="18" />
-        </div>
-
-        <!-- 栏目标题 Row -->
-        <div class="reels-header-row">
-          <div class="column-title">类型/口味</div>
-          <div class="column-title main-title">{{ currentCatMeta?.emoji }} 今日{{ currentCatMeta?.name.replace('池','') }}</div>
-          <div class="column-title">吃货运势</div>
-        </div>
-
-        <!-- 老虎机 Display 窗口 (纯 3D 滚轮) -->
-        <div class="display-window">
-          <!-- 渐变阴影遮罩 (顶部与底部) -->
-          <div class="window-overlay"></div>
-
-          <!-- 中奖高亮指示线框 -->
-          <div class="target-highlight-bar">
-            <span class="pointer-arrow left">▶</span>
-            <span class="pointer-arrow right">◀</span>
+        <div class="team-card-body">
+          <div class="big-emoji-wrap">{{ todayTeamResult?.emoji }}</div>
+          <h2 class="team-location-title">{{ todayTeamResult?.locationName }}</h2>
+          
+          <div class="tags-row" v-if="todayTeamResult?.tags?.length">
+            <span v-for="tag in todayTeamResult.tags" :key="tag" class="tag-pill"># {{ tag }}</span>
+            <span class="price-tag" v-if="todayTeamResult?.priceRange">{{ todayTeamResult.priceRange }}</span>
           </div>
 
-          <!-- 3D 滚动槽 1: 标签/氛围 -->
-          <div class="reel-column">
-            <div class="reel-viewport">
-              <div class="reel-strip" :style="{ transform: `translateY(-${reel1Offset}px)`, transition: reelTransition }">
-                <div v-for="(item, idx) in reel1Items" :key="idx" class="reel-item">
-                  <span class="reel-tag">{{ item }}</span>
-                </div>
-              </div>
-            </div>
+          <div class="recommend-box" v-if="todayTeamResult?.recommendedDish">
+            <span class="box-label">💡 推荐菜品：</span>
+            <span class="box-text">{{ todayTeamResult.recommendedDish }}</span>
           </div>
 
-          <!-- 3D 滚动槽 2: 地点与 Emoji (核心) -->
-          <div class="reel-column main-reel">
-            <div class="reel-viewport">
-              <div class="reel-strip" :style="{ transform: `translateY(-${reel2Offset}px)`, transition: reelTransition }">
-                <div v-for="(loc, idx) in reel2Items" :key="idx" class="reel-item loc-item">
-                  <span class="item-emoji">{{ loc.emoji }}</span>
-                  <span class="item-name">{{ loc.name }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 3D 滚动槽 3: 运势判词 -->
-          <div class="reel-column">
-            <div class="reel-viewport">
-              <div class="reel-strip" :style="{ transform: `translateY(-${reel3Offset}px)`, transition: reelTransition }">
-                <div v-for="(word, idx) in reel3Items" :key="idx" class="reel-item">
-                  <span class="reel-fortune">{{ word }}</span>
-                </div>
-              </div>
-            </div>
+          <div class="team-meta-info">
+            ⏰ 抽取时间：{{ todayTeamResult?.rolledAt }} · {{ todayTeamResult?.rolledBy || '搭子成员' }} 已锁定今日菜单
           </div>
         </div>
 
-        <!-- 摇杆/启动按钮区 -->
-        <div class="action-bar">
-          <button 
-            class="btn-primary roll-btn" 
-            :disabled="isRolling || isPoolEmpty" 
-            @click="startRoll"
-          >
-            <div class="btn-inner">
-              <Dice5 v-if="!isRolling" :size="24" class="btn-icon" />
-              <RefreshCw v-else :size="24" class="btn-icon spin-icon" />
-              <span class="btn-text">
-                {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮搭子选午餐！(ROLL)' : `帮我选${currentCatMeta?.name || ''}！(ROLL)`)) }}
-              </span>
-            </div>
+        <div class="team-card-actions">
+          <button class="btn-primary" @click="handleRecordTeamResult">
+            <Check :size="18" />
+            <span>记录为我的今日日志</span>
           </button>
+          <button class="btn-secondary" @click="handleRerollTeamResult">
+            <RotateCcw :size="18" />
+            <span>重新选定 (重抽并同步搭子圈)</span>
+          </button>
+        </div>
+      </div>
 
-          <!-- 弱化手选入口，优先级低 -->
-          <div class="secondary-actions" v-if="!isRolling">
-            <button 
-              type="button" 
-              class="btn-text-link"
-              @click="openManualSelect"
-            >
-              👋 不想Roll？手动选择一个
-            </button>
+      <div v-else key="machine-main" class="machine-main-wrapper">
+        <!-- 池子进度提示卡 -->
+        <div class="pool-status-card">
+          <div class="status-info">
+            <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
+            <span class="status-text">
+              <template v-if="settings.activeMode === 'team'">[👥 搭子待抽池] </template>
+              {{ currentCatMeta?.emoji }} {{ currentCatMeta?.name }}待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
+            </span>
+
+            <label class="weekly-toggle-badge" title="开启后本周 (周一至周日) 已抽中过的餐厅不会再次重抽">
+              <input type="checkbox" v-model="settings.weeklyNoRepeat" class="weekly-checkbox" />
+              <span>📅 按周不重复</span>
+            </label>
           </div>
-
-          <p class="anti-repeat-tip">
-            ✨ {{ settings.activeMode === 'team' ? '午餐搭子协同：任何人完成 Roll 后搭子圈全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
-          </p>
+          <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
+            <RotateCcw :size="13" />
+            重置池子 (已吃{{ drawnList.length }})
+          </button>
         </div>
 
-        <!-- 📅 今日便当打卡清单 (5槽位) -->
-        <div v-if="settings.activeMode === 'personal'" class="daily-bento-checklist glass-card">
-          <div class="checklist-header">
-            <CalendarCheck :size="18" class="text-orange" />
-            <span>📅 今日便当打卡清单</span>
+        <!-- 主老虎机机器 Frame -->
+        <div class="machine-frame glass-card">
+          <div class="machine-header">
+            <Sparkles class="sparkle-icon" :size="18" />
+            <span>{{ settings.activeMode === 'team' ? 'BUDDY RANDOM ROLL' : 'BENTO RANDOM ROLL' }}</span>
+            <Sparkles class="sparkle-icon" :size="18" />
           </div>
-          <div class="checklist-items">
-            <div v-for="cat in visibleMealCategories" :key="cat.key" class="check-item-row" :class="{ 'is-active': selectedCategory === cat.key }">
-              <div class="cat-label">
-                <span class="cat-icon">{{ cat.emoji }}</span>
-                <span class="cat-title">{{ cat.name.replace('池','') }}</span>
-              </div>
 
-              <div class="cat-content">
-                <template v-if="getTodayRecordsByCat(cat.key).length > 0">
-                  <div class="records-sub-list">
-                    <div v-for="rec in getTodayRecordsByCat(cat.key)" :key="rec.id" class="single-rec-item">
-                      <span class="food-emoji">{{ rec.emoji }}</span>
-                      <span class="food-name">{{ rec.locationName }}</span>
-                      
-                      <span v-if="rec.status === 'planned'" class="badge-status planned">📌 预选</span>
-                      <span v-else class="badge-status confirmed">
-                        ✅ {{ rec.cost ? `￥${rec.cost}` : '已打卡' }}
-                      </span>
+          <!-- 栏目标题 Row -->
+          <div class="reels-header-row">
+            <div class="column-title">类型/口味</div>
+            <div class="column-title main-title">{{ currentCatMeta?.emoji }} 今日{{ currentCatMeta?.name.replace('池','') }}</div>
+            <div class="column-title">吃货运势</div>
+          </div>
 
-                      <!-- 若为预选记录，提供内联确认按钮 -->
-                      <button v-if="rec.status === 'planned'" class="mini-btn action-confirm inline-confirm" @click="handleQuickConfirm(rec.id)" title="确认吃了">
-                        ✅ 吃了
-                      </button>
-                    </div>
+          <!-- 老虎机 Display 窗口 (纯 3D 滚轮) -->
+          <div class="display-window">
+            <!-- 渐变阴影遮罩 (顶部与底部) -->
+            <div class="window-overlay"></div>
+
+            <!-- 中奖高亮指示线框 -->
+            <div class="target-highlight-bar">
+              <span class="pointer-arrow left">▶</span>
+              <span class="pointer-arrow right">◀</span>
+            </div>
+
+            <!-- 3D 滚动槽 1: 标签/氛围 -->
+            <div class="reel-column">
+              <div class="reel-viewport">
+                <div class="reel-strip" :style="{ transform: `translateY(-${reel1Offset}px)`, transition: reelTransition }">
+                  <div v-for="(item, idx) in reel1Items" :key="idx" class="reel-item">
+                    <span class="reel-tag">{{ item }}</span>
                   </div>
-                </template>
-                <template v-else>
-                  <span class="empty-text">尚无安排</span>
-                </template>
+                </div>
               </div>
+            </div>
 
-              <div class="cat-actions">
-                <button 
-                  v-if="getTodayRecordsByCat(cat.key).length === 0" 
-                  class="mini-btn action-roll"
-                  @click="handleSelectCategory(cat.key)"
-                >
-                  🎲 去摇号
-                </button>
-                <template v-else>
-                  <button 
-                    v-if="getTodayRecordsByCat(cat.key).some(r => r.status === 'planned')" 
-                    class="mini-btn action-reroll" 
-                    @click="handleSelectCategory(cat.key)" 
-                    title="切到此餐池重新摇号"
-                  >
-                    🔄 重Roll
-                  </button>
-                  <span v-else class="done-check">✓</span>
+            <!-- 3D 滚动槽 2: 地点与 Emoji (核心) -->
+            <div class="reel-column main-reel">
+              <div class="reel-viewport">
+                <div class="reel-strip" :style="{ transform: `translateY(-${reel2Offset}px)`, transition: reelTransition }">
+                  <div v-for="(loc, idx) in reel2Items" :key="idx" class="reel-item loc-item">
+                    <span class="item-emoji">{{ loc.emoji }}</span>
+                    <span class="item-name">{{ loc.name }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                  <!-- 微型隐蔽再记一笔按钮 (小概率事件：一天两杯奶茶/两顿晚餐等) -->
+            <!-- 3D 滚动槽 3: 运势判词 -->
+            <div class="reel-column">
+              <div class="reel-viewport">
+                <div class="reel-strip" :style="{ transform: `translateY(-${reel3Offset}px)`, transition: reelTransition }">
+                  <div v-for="(word, idx) in reel3Items" :key="idx" class="reel-item">
+                    <span class="reel-fortune">{{ word }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 摇杆/启动按钮区 -->
+          <div class="action-bar">
+            <button 
+              class="btn-primary roll-btn" 
+              :disabled="isRolling || isPoolEmpty" 
+              @click="startRoll"
+            >
+              <div class="btn-inner">
+                <Dice5 v-if="!isRolling" :size="24" class="btn-icon" />
+                <RefreshCw v-else :size="24" class="btn-icon spin-icon" />
+                <span class="btn-text">
+                  {{ isRolling ? '抽取中...' : (isPoolEmpty ? '池子已空 请重置' : (settings.activeMode === 'team' ? '帮搭子选午餐！(ROLL)' : `帮我选${currentCatMeta?.name || ''}！(ROLL)`)) }}
+                </span>
+              </div>
+            </button>
+
+            <!-- 弱化手选入口，优先级低 -->
+            <div class="secondary-actions" v-if="!isRolling">
+              <button 
+                type="button" 
+                class="btn-text-link"
+                @click="openManualSelect"
+              >
+                👋 不想Roll？手动选择一个
+              </button>
+            </div>
+
+            <p class="anti-repeat-tip">
+              ✨ {{ settings.activeMode === 'team' ? '午餐搭子协同：任何人完成 Roll 后搭子圈全员自动同步' : '不重复机制生效中：抽中地点自动移出本轮待抽池' }}
+            </p>
+          </div>
+
+          <!-- 📅 今日便当打卡清单 (5槽位) -->
+          <div v-if="settings.activeMode === 'personal'" class="daily-bento-checklist glass-card">
+            <div class="checklist-header">
+              <CalendarCheck :size="18" class="text-orange" />
+              <span>📅 今日便当打卡清单</span>
+            </div>
+            <div class="checklist-items">
+              <div v-for="cat in visibleMealCategories" :key="cat.key" class="check-item-row" :class="{ 'is-active': selectedCategory === cat.key }">
+                <div class="cat-label">
+                  <span class="cat-icon">{{ cat.emoji }}</span>
+                  <span class="cat-title">{{ cat.name.replace('池','') }}</span>
+                </div>
+
+                <div class="cat-content">
+                  <template v-if="getTodayRecordsByCat(cat.key).length > 0">
+                    <div class="records-sub-list">
+                      <div v-for="rec in getTodayRecordsByCat(cat.key)" :key="rec.id" class="single-rec-item">
+                        <span class="food-emoji">{{ rec.emoji }}</span>
+                        <span class="food-name">{{ rec.locationName }}</span>
+                        
+                        <span v-if="rec.status === 'planned'" class="badge-status planned">📌 预选</span>
+                        <span v-else class="badge-status confirmed">
+                          ✅ {{ rec.cost ? `￥${rec.cost}` : '已打卡' }}
+                        </span>
+
+                        <!-- 若为预选记录，提供内联确认按钮 -->
+                        <button v-if="rec.status === 'planned'" class="mini-btn action-confirm inline-confirm" @click="handleQuickConfirm(rec.id)" title="确认吃了">
+                          ✅ 吃了
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span class="empty-text">尚无安排</span>
+                  </template>
+                </div>
+
+                <div class="cat-actions">
                   <button 
-                    class="mini-add-extra-btn" 
-                    @click="openAddExtraModal(cat.key)" 
-                    title="再记一笔 (小概率多条打卡，如第2杯奶茶)"
+                    v-if="getTodayRecordsByCat(cat.key).length === 0" 
+                    class="mini-btn action-roll"
+                    @click="handleSelectCategory(cat.key)"
                   >
-                    <Plus :size="11" />
+                    🎲 去摇号
                   </button>
-                </template>
+                  <template v-else>
+                    <button 
+                      v-if="getTodayRecordsByCat(cat.key).some(r => r.status === 'planned')" 
+                      class="mini-btn action-reroll" 
+                      @click="handleSelectCategory(cat.key)" 
+                      title="切到此餐池重新摇号"
+                    >
+                      🔄 重Roll
+                    </button>
+                    <span v-else class="done-check">✓</span>
+
+                    <!-- 微型隐蔽再记一笔按钮 (小概率事件：一天两杯奶茶/两顿晚餐等) -->
+                    <button 
+                      class="mini-add-extra-btn" 
+                      @click="openAddExtraModal(cat.key)" 
+                      title="再记一笔 (小概率多条打卡，如第2杯奶茶)"
+                    >
+                      <Plus :size="11" />
+                    </button>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </template>
+    </transition>
 
     <!-- 手动选择地点弹窗 -->
     <div v-if="showManualSelectModal" class="manual-select-modal-overlay" @click.self="closeManualSelect">
@@ -694,6 +696,25 @@ function handleResetPool() {
   flex-direction: column;
   gap: 16px;
   padding: 16px;
+  min-height: 480px;
+}
+
+.machine-main-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.fade-switch-enter-active,
+.fade-switch-leave-active {
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-switch-enter-from,
+.fade-switch-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 .pool-status-card {
@@ -1076,6 +1097,7 @@ function handleResetPool() {
 
 .team-card-actions {
   display: flex;
+  flex-direction: column;
   gap: 10px;
   width: 100%;
   margin-top: 8px;
@@ -1083,8 +1105,6 @@ function handleResetPool() {
 }
 
 .team-card-actions button {
-  flex: 1;
-  min-width: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
