@@ -231,35 +231,55 @@
     <div v-if="showWeeklyReportModal" class="modal-overlay" @click.self="showWeeklyReportModal = false">
       <div class="modal-content weekly-report-modal animate-fade-in">
         <div class="report-header">
-          <Sparkles class="text-orange" :size="22" />
-          <h3 class="report-title">✨ 周周便当 · AI 饮食与财务周报</h3>
+          <div class="title-with-icon">
+            <Sparkles class="text-orange" :size="22" />
+            <h3 class="report-title">周周便当 · AI 饮食与财务周报</h3>
+          </div>
           <button type="button" class="close-report-btn" @click="showWeeklyReportModal = false">✕</button>
         </div>
 
         <div v-if="weeklyReport" class="report-card-body">
+          <!-- 🏆 吃货称号金牌卡片 -->
           <div class="report-badge-box">
-            <span class="badge-label">🏆 吃货称号认定：</span>
-            <h4 class="report-badge-title">{{ weeklyReport.title }}</h4>
+            <span class="badge-label">🏆 独家吃货勋章认定</span>
+            <h4 class="report-badge-title">「 {{ weeklyReport.title }} 」</h4>
           </div>
 
-          <div class="report-item-card">
-            <div class="item-title">🍔 饮食偏好与频次分析：</div>
+          <!-- 🍔 饮食偏好与频次分析 -->
+          <div class="report-item-card card-pink">
+            <div class="item-header">
+              <span class="item-icon">🍔</span>
+              <span class="item-title">饮食偏好与频次分析</span>
+            </div>
             <p class="item-text">{{ weeklyReport.habitAnalysis }}</p>
           </div>
 
-          <div class="report-item-card">
-            <div class="item-title">🥗 营养与口味均衡建议：</div>
+          <!-- 🥗 营养与口味均衡建议 -->
+          <div class="report-item-card card-green">
+            <div class="item-header">
+              <span class="item-icon">🥗</span>
+              <span class="item-title">营养与口味均衡建议</span>
+            </div>
             <p class="item-text">{{ weeklyReport.healthInsight }}</p>
           </div>
 
-          <div class="report-item-card">
-            <div class="item-title">💰 伙食开销与预算洞察：</div>
+          <!-- 💰 伙食开销与预算洞察 -->
+          <div class="report-item-card card-amber">
+            <div class="item-header">
+              <span class="item-icon">💰</span>
+              <span class="item-title">伙食开销与预算洞察</span>
+            </div>
             <p class="item-text">{{ weeklyReport.budgetInsight }}</p>
           </div>
         </div>
 
         <div class="report-footer">
-          <button type="button" class="btn-primary flex-1" @click="showWeeklyReportModal = false">收下报告</button>
+          <button type="button" class="btn-secondary small-btn flex-1" @click="copyWeeklyReportText">
+            📋 复制周报文本
+          </button>
+          <button type="button" class="btn-primary small-btn flex-1" @click="showWeeklyReportModal = false">
+            收下报告
+          </button>
         </div>
       </div>
     </div>
@@ -304,6 +324,14 @@ async function handleGenerateWeeklyReport() {
     showWeeklyReportModal.value = true;
     soundEffects.playWinSound();
   }
+}
+
+function copyWeeklyReportText() {
+  if (!weeklyReport.value) return;
+  const text = `✨ 周周便当 · AI 饮食周报\n\n🏆 称号：${weeklyReport.value.title}\n\n🍔 饮食偏好：${weeklyReport.value.habitAnalysis}\n\n🥗 营养建议：${weeklyReport.value.healthInsight}\n\n💰 预算洞察：${weeklyReport.value.budgetInsight}`;
+  navigator.clipboard.writeText(text);
+  soundEffects.playTick(800);
+  alert('已成功将 AI 饮食周报文本复制到剪贴板！');
 }
 
 const todayStr = computed(() => getTodayDateString());
@@ -1275,80 +1303,147 @@ async function confirmDelete(id: string) {
   background: #FFFDF9;
   border-radius: 20px;
   padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
 }
 
 .report-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   margin-bottom: 16px;
-  position: relative;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed #E2E8F0;
+}
+
+.title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .report-title {
   font-size: 1.05rem;
   font-weight: 800;
   color: #1E293B;
-  flex: 1;
 }
 
 .close-report-btn {
-  background: none;
+  background: #F1F5F9;
   border: none;
-  font-size: 18px;
-  color: #94A3B8;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #64748B;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-report-btn:hover {
+  background: #E2E8F0;
+  color: #0F172A;
 }
 
 .report-card-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 14px;
+  margin-bottom: 20px;
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .report-badge-box {
-  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-  border: 1px solid #F59E0B;
-  border-radius: 12px;
-  padding: 12px 14px;
+  background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
+  border: 1px solid #FDBA74;
+  border-radius: 14px;
+  padding: 14px;
   text-align: center;
+  box-shadow: 0 2px 8px rgba(251, 146, 60, 0.12);
 }
 
 .badge-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #78350F;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #C2410C;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .report-badge-title {
-  font-size: 1.2rem;
+  font-size: 1.28rem;
   font-weight: 900;
-  color: #D97706;
+  color: #9A3412;
   margin-top: 4px;
 }
 
 .report-item-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: 12px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 14px;
+  transition: transform 0.2s ease;
+}
+
+.report-item-card:hover {
+  transform: translateY(-1px);
+}
+
+/* 分色轻量调性卡片 */
+.card-pink {
+  background: #FFF1F2;
+  border: 1px solid #FECDD3;
+}
+
+.card-pink .item-title {
+  color: #BE123C;
+}
+
+.card-green {
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+}
+
+.card-green .item-title {
+  color: #15803D;
+}
+
+.card-amber {
+  background: #FEFCE8;
+  border: 1px solid #FEF08A;
+}
+
+.card-amber .item-title {
+  color: #A16207;
+}
+
+.item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.item-icon {
+  font-size: 1.1rem;
 }
 
 .item-title {
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   font-weight: 800;
-  color: #334155;
-  margin-bottom: 4px;
 }
 
 .item-text {
-  font-size: 0.85rem;
-  color: #475569;
-  line-height: 1.45;
+  font-size: 0.84rem;
+  color: #334155;
+  line-height: 1.55;
 }
 
 .report-footer {
   display: flex;
+  align-items: center;
+  gap: 10px;
 }
 </style>

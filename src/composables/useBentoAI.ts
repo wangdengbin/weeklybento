@@ -42,6 +42,19 @@ export interface RecipeResult {
   chefTips: string;
 }
 
+function parseFunctionError(error: any, defaultMsg: string): string {
+  if (error?.status === 429 || error?.message?.includes('429')) {
+    return 'AI 服务请求过于频繁（触发频率保护），请 1 分钟后再试哦！';
+  }
+  if (error?.status === 400 || error?.message?.includes('non-2xx') || error?.message?.includes('400')) {
+    return '云端 Edge Function 未同步最新代码，请在 Supabase Dashboard 粘贴覆盖 bento-ai 云函数！';
+  }
+  if (error?.status === 500 || error?.message?.includes('500')) {
+    return '云端 API 异常，请确认 Supabase 后台已配置 DEEPSEEK_API_KEY Secrets！';
+  }
+  return error?.message || defaultMsg;
+}
+
 export function useBentoAI() {
   const isLoading = ref(false);
   const aiError = ref<string | null>(null);
@@ -71,10 +84,7 @@ export function useBentoAI() {
       });
 
       if (error) {
-        if (error.status === 429 || error.message?.includes('429')) {
-          throw new Error('AI 服务请求过于频繁，请稍后再试！');
-        }
-        throw new Error(error.message || 'AI 解析请求失败');
+        throw new Error(parseFunctionError(error, 'AI 解析请求失败'));
       }
 
       if (data?.error) {
@@ -161,10 +171,7 @@ export function useBentoAI() {
       });
 
       if (error) {
-        if (error.status === 429 || error.message?.includes('429')) {
-          throw new Error('AI 服务调用频次超限，请稍后再生成周报！');
-        }
-        throw new Error(error.message || '生成 AI 周报失败');
+        throw new Error(parseFunctionError(error, '生成 AI 周报失败'));
       }
 
       if (data?.error) {
@@ -202,10 +209,7 @@ export function useBentoAI() {
       });
 
       if (error) {
-        if (error.status === 429 || error.message?.includes('429')) {
-          throw new Error('辩论评委正在喝水（触发 AI 频率限制），请稍后再试！');
-        }
-        throw new Error(error.message || 'AI 美食辩论请求失败');
+        throw new Error(parseFunctionError(error, 'AI 美食辩论请求失败'));
       }
 
       if (data?.error) {
@@ -243,10 +247,7 @@ export function useBentoAI() {
       });
 
       if (error) {
-        if (error.status === 429 || error.message?.includes('429')) {
-          throw new Error('大厨正在休息（触发 AI 频率限制），请稍后再试！');
-        }
-        throw new Error(error.message || '生成 AI 菜谱失败');
+        throw new Error(parseFunctionError(error, '生成 AI 菜谱失败'));
       }
 
       if (data?.error) {

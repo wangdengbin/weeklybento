@@ -1,52 +1,42 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// 内存速率限制表（基于 IP 限制 AI 调用）
-// 规则：单个 IP 1 分钟内最多允许 8 次 AI 请求
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const MAX_AI_REQUESTS_PER_WINDOW = 8;
-const ipRequestCounts = new Map<string, { count: number; resetTime: number }>();
+// 内存 IP 简单限流 (1分钟内最多调用 8 次)
+const ipRateMap = new Map<string, { count: number; resetTime: number }>();
 
-function isRateLimited(clientIp: string): boolean {
+function checkRateLimit(clientIP: string, limit = 8, windowMs = 60000): boolean {
   const now = Date.now();
-  const record = ipRequestCounts.get(clientIp);
+  const record = ipRateMap.get(clientIP);
 
   if (!record || now > record.resetTime) {
-    ipRequestCounts.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return false;
-  }
-
-  if (record.count >= MAX_AI_REQUESTS_PER_WINDOW) {
+    ipRateMap.set(clientIP, { count: 1, resetTime: now + windowMs });
     return true;
   }
 
+  if (record.count >= limit) {
+    return false;
+  }
+
   record.count += 1;
-  return false;
+  return true;
 }
 
 serve(async (req) => {
-  // 处理 OPTIONS 跨域预检
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // 提取客户端 IP（仅对 AI 调用进行速率限制）
-    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown_ip';
-    if (isRateLimited(clientIp)) {
+    // 客户端 IP 速率限制检测
+    const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown-ip';
+    if (!checkRateLimit(clientIP)) {
       return new Response(
-        JSON.stringify({ 
-          error: 'Rate limit exceeded', 
-          message: 'AI 服务调用过于频繁，食神打瞌睡中，请 1 分钟后再试哦！' 
-        }),
-        { 
-          status: 429, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: 'Rate limit exceeded', message: 'AI 调用过于频繁，请 1 分钟后再试！' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -59,7 +49,23 @@ serve(async (req) => {
       );
     }
 
-    const { action, text, locationName, tags, recommendedDish, mealCategory } = await req.json();
+    // ⚡ 关键修正：Request Body 在 Deno 中仅能消耗解析一次，统一解构所有参数
+    const body = await req.json().catch(() => ({}));
+    const { 
+      action, 
+      text, 
+      locationName, 
+      tags, 
+      recommendedDish, 
+      mealCategory,
+      recordsSummary,
+      totalCost,
+      monthlyBudget,
+      location1,
+      location2,
+      dishName,
+      imageText
+    } = body || {};
 
     // 1. 场景 1: AI 智能解析非结构化文本导入地点
     if (action === 'parse_location') {
@@ -70,7 +76,6 @@ serve(async (req) => {
         );
       }
 
-      // 截断文本防耗尽 Token (上限 500 字符)
       const sanitizedText = text.slice(0, 500);
 
       const systemPrompt = `你是一个智能美食数据解析助手。请将用户输入的关于餐厅/美食的散乱介绍、微信推荐文案或小票文字，解析为标准的纯 JSON 对象。
@@ -78,11 +83,11 @@ serve(async (req) => {
 {
   "name": "餐厅名称",
   "emoji": "一个最匹配该餐厅/食物风格的 Emoji 图标",
-  "tags": ["标签1", "标签2", "标签3"],
-  "priceRange": "人均预算，如 ￥25-40 或 ￥30",
-  "recommendedDish": "推荐菜品或招牌菜"
+  "tags": ["标签1", "标签2"],
+  "priceRange": "预估人均价格，例如 ￥25-40",
+  "recommendedDish": "招牌或推荐菜品"
 }
-如果某些信息未提及，请合理推断补充简短标签或通用 Emoji。绝对不要包含 markdown 格式标记或其他多余话语。`;
+绝对不要包含 markdown 格式标记或额外多余文字。`;
 
       const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -160,8 +165,6 @@ serve(async (req) => {
 
     // 3. 场景 3: AI “周周便当”每周饮食总结与健康省钱周报
     if (action === 'weekly_report') {
-      const { recordsSummary, totalCost, monthlyBudget } = await req.json();
-
       const systemPrompt = `你是一位精明幽默的“周周便当”饮食与财务顾问大师。请根据用户近期的打卡记录与消费统计，生成一份趣味卡片式周报 JSON。
 必须仅返回 JSON，格式如下：
 {
@@ -213,24 +216,24 @@ serve(async (req) => {
 
     // 4. 场景 4: AI “救救纠结症”双店 PK 辩论
     if (action === 'food_debate') {
-      const { location1, location2 } = await req.json();
       const loc1Name = location1?.name || '选项 A';
       const loc2Name = location2?.name || '选项 B';
 
       const systemPrompt = `你是一个美食辩论裁判。请让两位评委【热量快乐派】与【健康减脂派】针对两个餐厅选项展开 3 轮幽默互掐辩论，最后裁判给出结论。
 必须仅返回 JSON，格式如下：
 {
-  "debate": [
-    { "speaker": "热量快乐派", "avatar": "🍔", "content": "发言1" },
-    { "speaker": "健康减脂派", "avatar": "🥗", "content": "发言2" },
-    { "speaker": "热量快乐派", "avatar": "🍔", "content": "发言3" }
+  "rounds": [
+    { "speaker": "热量快乐派", "point": "辩词（40字左右）" },
+    { "speaker": "健康减脂派", "point": "辩词（40字左右）" },
+    { "speaker": "热量快乐派", "point": "辩词（40字左右）" },
+    { "speaker": "健康减脂派", "point": "辩词（40字左右）" }
   ],
-  "winner": "胜出的餐厅名称（必须严格是 '${loc1Name}' 或 '${loc2Name}' 之一）",
-  "verdict": "裁判的一句话终极推导结论（40字以内）"
+  "winner": "${loc1Name} 或 ${loc2Name}",
+  "verdict": "裁判裁决理由（50字左右）"
 }
-绝对不要包含 markdown 格式标记或多余文字。`;
+绝对不要包含 markdown 格式标记或额外多余文字。`;
 
-      const userMessage = `辩论双方：选项A: ${loc1Name} (${location1?.tags?.join(',') || '美食'}) VS 选项B: ${loc2Name} (${location2?.tags?.join(',') || '美食'})`;
+      const userMessage = `对比地点1：${loc1Name} (${(location1?.tags || []).join(',')})，对比地点2：${loc2Name} (${(location2?.tags || []).join(',')})`;
 
       const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -256,12 +259,12 @@ serve(async (req) => {
         debateJson = JSON.parse(resultText);
       } catch (e) {
         debateJson = {
-          debate: [
-            { speaker: "热量快乐派", avatar: "🍔", content: `选${loc1Name}啊，吃饱了才有力气工作！` },
-            { speaker: "健康减脂派", avatar: "🥗", content: `选${loc2Name}更清爽，身体无负担！` }
+          rounds: [
+            { speaker: '热量快乐派', point: `果断选 ${loc1Name}！快乐才是无价的！` },
+            { speaker: '健康减脂派', point: `保持理智，${loc2Name} 负担更轻更健康！` }
           ],
           winner: loc1Name,
-          verdict: `今天食神听从内心的召唤，建议选 ${loc1Name}！`
+          verdict: '经过激辩，今日遵从内心直觉吃更爽快的这家！'
         };
       }
 
@@ -271,30 +274,23 @@ serve(async (req) => {
       );
     }
 
-    // 5. 场景 5: AI 简易快手菜谱生成 (极低 Token 控成本版)
+    // 5. 场景 5: 一人食 15分钟 AI 简易快手菜谱
     if (action === 'generate_recipe') {
-      const { dishName, imageText } = await req.json();
-      const targetDish = dishName || imageText || '快手便当菜';
+      const targetDish = dishName || imageText || '特色快手菜';
 
-      const systemPrompt = `你是一位家庭快手菜大厨。请为指定的菜品生成一份一人食 15分钟简易菜谱 JSON。
-必须仅返回纯 JSON，格式严格如下：
+      const systemPrompt = `你是一位极简快手菜大厨。请为给定的菜名或食材，输出一份【一人食 15分钟极简菜谱】JSON。
+必须仅返回 JSON，格式如下：
 {
-  "dishName": "菜品名称",
-  "difficulty": "15分钟快手 🟢",
-  "servings": "1人份",
-  "ingredients": [
-    { "name": "主料/辅料名", "amount": "适量或克数" }
-  ],
-  "steps": [
-    "1. 步骤说明一",
-    "2. 步骤说明二",
-    "3. 步骤说明三"
-  ],
-  "chefTips": "💡 关键秘诀提示（一句话）"
+  "title": "菜品名称",
+  "difficulty": "简单 / 极简 / 有手就行",
+  "cookTime": "10-15分钟",
+  "ingredients": ["食材1 (用量)", "食材2 (用量)", "调料 (适量)"],
+  "steps": ["步骤1说明", "步骤2说明", "步骤3说明"],
+  "chefTips": "大厨避坑秘诀（30字以内）"
 }
-限制步骤最多 3-4 步，简洁实用，绝对不要包含 markdown 格式标记或额外字句。`;
+绝对不要包含 markdown 格式标记或额外多余文字。`;
 
-      const userMessage = `请生成简易菜谱：${targetDish}`;
+      const userMessage = `目标菜品或识别文本：${targetDish.slice(0, 300)}`;
 
       const response = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
@@ -309,7 +305,7 @@ serve(async (req) => {
             { role: 'user', content: userMessage },
           ],
           max_tokens: 450,
-          temperature: 0.4,
+          temperature: 0.5,
           response_format: { type: 'json_object' }
         }),
       });
@@ -321,12 +317,12 @@ serve(async (req) => {
         recipeJson = JSON.parse(resultText);
       } catch (e) {
         recipeJson = {
-          dishName: targetDish,
-          difficulty: "15分钟快手 🟢",
-          servings: "1人份",
-          ingredients: [{ name: "基础食材", amount: "适量" }],
-          steps: ["1. 食材洗净切块备用。", "2. 油锅烧热下锅大火翻炒至熟。", "3. 加少许盐调味即可出锅。"],
-          chefTips: "💡 大火快炒能保留食材新鲜口感。"
+          title: targetDish,
+          difficulty: '极简',
+          cookTime: '15分钟',
+          ingredients: ['主料 200g', '盐 适量', '食用油 1勺'],
+          steps: ['食材洗净切块', '热锅下油翻炒至熟透', '出锅前撒少许调味料即可'],
+          chefTips: '大火快炒锁住鲜味！'
         };
       }
 
