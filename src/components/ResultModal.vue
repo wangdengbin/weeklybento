@@ -85,18 +85,20 @@
       </div>
 
       <div class="card-actions">
-        <button class="btn-primary confirm-btn" @click="handleSaveAsPlanned">
-          <BookmarkPlus :size="18" />
-          <span>📌 保存为{{ categoryMeta?.name || '' }}预选计划</span>
-        </button>
+        <!-- 主操作：确认吃了 / 次级操作：先存预选 -->
+        <div class="primary-action-row">
+          <button class="btn-primary-gradient confirm-btn main-action" @click="handleConfirmEaten">
+            <Check :size="18" />
+            <span>✅ 确认吃了{{ inputCost ? ` (￥${inputCost})` : '' }}</span>
+          </button>
+          <button class="btn-primary plan-btn" @click="handleSaveAsPlanned">
+            <BookmarkPlus :size="18" />
+            <span>📌 先存预选</span>
+          </button>
+        </div>
 
-        <button class="btn-primary-gradient confirm-btn" @click="handleConfirmEaten">
-          <Check :size="18" />
-          <span>✅ 确认吃了{{ inputCost ? ` (￥${inputCost})` : '' }}</span>
-        </button>
-
-        <button v-if="settings.activeMode === 'personal'" class="btn-secondary re-roll-btn" @click="handleReroll">
-          <RefreshCw :size="16" />
+        <button v-if="settings.activeMode === 'personal'" class="re-roll-link" @click="handleReroll">
+          <RefreshCw :size="14" />
           <span>不喜欢，再 Roll 一次</span>
         </button>
       </div>
@@ -323,14 +325,39 @@ function handleClose() {
   gap: 10px;
 }
 
-.confirm-btn {
-  width: 100%;
-  padding: 14px;
+.primary-action-row {
+  display: flex;
+  gap: 10px;
 }
 
-.re-roll-btn {
-  width: 100%;
-  padding: 12px;
+.main-action {
+  flex: 1.25;
+  padding: 14px 12px;
+}
+
+.plan-btn {
+  flex: 1;
+  padding: 14px 12px;
+  font-size: 0.95rem;
+}
+
+.re-roll-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px;
+  transition: color 0.15s ease;
+}
+
+.re-roll-link:hover {
+  color: var(--primary);
 }
 
 .expense-input-box {
@@ -523,5 +550,16 @@ function handleClose() {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* 桌面端加宽结果卡片 */
+@media (min-width: 768px) {
+  .result-card {
+    width: min(460px, 92vw);
+  }
+
+  .food-name {
+    font-size: 1.8rem;
+  }
 }
 </style>

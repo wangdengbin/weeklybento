@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap');
-
+/* 字体使用本地系统栈，避免依赖 Google Fonts 外链（国内加载失败/闪字） */
 :root {
   --primary: #FF6B35;
   --primary-hover: #E85A24;
@@ -18,17 +17,21 @@
   --radius-sm: 10px;
 }
 
-/* 基础重置 */
+/* 基础重置：默认允许文本选择（复制地名/备注），仅交互控件局部禁用 */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   -webkit-tap-highlight-color: transparent;
+}
+
+button, a, label, input[type="checkbox"], input[type="radio"], select, .nav-item, .tab-btn, .mode-item, .cat-tab-btn, .close-btn, .icon-btn {
   user-select: none;
+  -webkit-user-select: none;
 }
 
 body {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Helvetica Neue", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
   background: var(--bg-gradient);
   background-attachment: fixed;
   color: var(--text-main);
@@ -48,6 +51,14 @@ body {
   box-shadow: 0 0 50px rgba(0, 0, 0, 0.05);
   background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(10px);
+  transition: max-width 0.25s ease;
+}
+
+/* 桌面端响应式加宽：充分利用屏幕宽度 */
+@media (min-width: 768px) {
+  #app {
+    max-width: 920px;
+  }
 }
 
 /* 标题微闪光效果 */
