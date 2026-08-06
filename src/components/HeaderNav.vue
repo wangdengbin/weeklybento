@@ -391,14 +391,34 @@ function openAdminModal() {
 }
 
 .login-tip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: 0.65rem;
   font-weight: 800;
-  background: #FEE2E2;
+  background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
   color: #DC2626;
-  padding: 1px 5px;
-  border-radius: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
   border: 1px solid #FCA5A5;
   margin-left: 3px;
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.15);
+  animation: loginTipPulse 2.2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+  transform-origin: center;
+}
+
+@keyframes loginTipPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 1px 4px rgba(220, 38, 38, 0.15);
+    border-color: #FCA5A5;
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 3px 10px rgba(220, 38, 38, 0.35);
+    border-color: #EF4444;
+    background: linear-gradient(135deg, #FEE2E2 0%, #FECDD3 100%);
+  }
 }
 
 .text-gray {

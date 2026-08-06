@@ -6,8 +6,9 @@
           <User :size="20" class="header-icon" />
           <span>{{ isAnonymous ? '用户账号与同步设置' : '个人账号信息' }}</span>
         </h3>
-        <button class="icon-btn close-btn" @click="handleClose">
-          <X :size="18" />
+        <button class="close-admin-btn" @click="handleClose" title="关闭窗口">
+          <X :size="15" />
+          <span>关闭</span>
         </button>
       </div>
 
@@ -41,8 +42,8 @@
         </div>
 
         <button class="btn-danger logout-btn" :disabled="isAuthLoading" @click="handleSignOut">
-          <LogOut :size="16" />
-          <span>退出当前账号 (重置为游客)</span>
+          <X :size="16" />
+          <span>关闭并登出账号 (重置为游客)</span>
         </button>
       </div>
 
@@ -109,7 +110,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { User, X, Sparkles, UserCheck, LogIn, UserPlus, LogOut } from 'lucide-vue-next';
+import { User, X, Sparkles, UserCheck, LogIn, UserPlus } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
 
@@ -199,6 +200,27 @@ function handleClose() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.close-admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.close-admin-btn:hover {
+  background: #FFE4E6;
+  color: #E11D48;
+  border-color: #FECDD3;
 }
 
 .modal-title {

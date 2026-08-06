@@ -1,8 +1,9 @@
 <template>
   <div v-if="visible" class="modal-overlay" @click.self="emit('close')">
     <section class="team-modal">
-      <button class="close-button" type="button" title="关闭" @click="emit('close')">
-        <X :size="20" />
+      <button class="close-modal-btn" type="button" title="关闭" @click="emit('close')">
+        <X :size="15" />
+        <span>关闭</span>
       </button>
 
       <template v-if="!isConfigured">
@@ -169,8 +170,8 @@
                     解散搭子圈
                   </button>
                   <button v-else class="secondary-mini-action" type="button" :disabled="isLoading" @click="handleLeaveTeam(t)">
-                    <LogOut :size="14" />
-                    退出搭子圈
+                    <X :size="14" />
+                    关闭并退出搭子圈
                   </button>
                 </div>
               </div>
@@ -241,7 +242,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw, Shield } from 'lucide-vue-next';
+import { Database, Plus, Share2, Users, X, Trash2, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw, Shield } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { getErrorMessage } from '../utils/error';
@@ -425,8 +426,8 @@ async function handleLeaveTeam(t: { id: string; name: string }) {
 <style scoped>
 .modal-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, 0.5); }
 .team-modal { position: relative; width: min(440px, 100%); max-height: 90vh; overflow-y: auto; box-sizing: border-box; padding: 24px; border-radius: 16px; background: #fff; color: #1f2937; text-align: left; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22); }
-.close-button { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: #F1F5F9; border-radius: 50%; color: #64748b; cursor: pointer; transition: all 0.2s ease; }
-.close-button:hover { background: #E2E8F0; color: #0F172A; }
+.close-modal-btn { position: absolute; top: 16px; right: 16px; display: inline-flex; align-items: center; gap: 4px; background: #F1F5F9; color: #64748B; border: 1px solid #E2E8F0; padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+.close-modal-btn:hover { background: #FFE4E6; color: #E11D48; border-color: #FECDD3; }
 
 .team-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; color: #ea580c; }
 .heading-title-row { display: flex; align-items: center; gap: 8px; }

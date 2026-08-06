@@ -5,8 +5,9 @@
         <Crown class="crown-icon" :size="22" />
         <h3 class="panel-title">管理员控制台</h3>
       </div>
-      <button class="icon-btn close-panel-btn" @click="handleLogout" title="退出管理模式">
-        <LogOut :size="18" />
+      <button class="close-admin-btn" @click="handleLogout" title="关闭管理员控制台">
+        <X :size="15" />
+        <span>关闭</span>
       </button>
     </div>
 
@@ -432,7 +433,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { 
-  Crown, LogOut, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet, Eye, EyeOff,
+  Crown, X, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet, Eye, EyeOff,
   Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText, Sparkles 
 } from 'lucide-vue-next';
 import EmojiPicker from './EmojiPicker.vue';
@@ -1031,8 +1032,25 @@ function handleImportFile(event: Event) {
   font-weight: 800;
 }
 
-.close-panel-btn {
-  background: #F3F4F6;
+.close-admin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  padding: 5px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.close-admin-btn:hover {
+  background: #FFE4E6;
+  color: #E11D48;
+  border-color: #FECDD3;
 }
 
 .panel-tabs {

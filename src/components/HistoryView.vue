@@ -33,11 +33,11 @@
         <span class="dash-title">📊 个人饮食与财务看板</span>
         <div class="dash-btn-group">
           <button class="btn-primary small-btn ai-report-btn ai-glow-btn" @click="handleGenerateWeeklyReport" :disabled="isAiLoading">
-            <Sparkles :size="14" class="ai-sparkle-icon" />
+            <Sparkles :size="12" class="ai-sparkle-icon" />
             <span>{{ isAiLoading ? '生成周报中...' : '✨ AI 饮食周报' }}</span>
           </button>
           <button class="export-csv-btn" @click="exportCSV" title="导出 Excel/CSV 格式记账明细单">
-            <FileSpreadsheet :size="14" />
+            <FileSpreadsheet :size="12" />
             <span>导出 CSV</span>
           </button>
         </div>
@@ -1292,13 +1292,39 @@ async function confirmDelete(id: string) {
 .dash-btn-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ai-report-btn {
   background: linear-gradient(135deg, #FF9933 0%, #FF6600 100%) !important;
-  box-shadow: 0 2px 8px rgba(255, 102, 0, 0.25);
+  box-shadow: 0 2px 6px rgba(255, 102, 0, 0.2);
   white-space: nowrap;
+  padding: 4px 10px !important;
+  font-size: 0.76rem !important;
+  border-radius: 14px !important;
+  gap: 4px !important;
+  height: 28px;
+}
+
+.export-csv-btn {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #E2E8F0;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border-radius: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  transition: all 0.2s ease;
+}
+
+.export-csv-btn:hover {
+  background: #E2E8F0;
+  color: #1E293B;
 }
 
 .weekly-report-modal {
