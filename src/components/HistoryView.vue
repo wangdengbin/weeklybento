@@ -31,10 +31,16 @@
     <div v-if="!isTeamMode" class="expense-dashboard glass-card">
       <div class="dash-header-row">
         <span class="dash-title">📊 个人饮食与财务看板</span>
-        <button class="export-csv-btn" @click="exportCSV" title="导出 Excel/CSV 格式记账明细单">
-          <FileSpreadsheet :size="14" />
-          <span>导出 CSV 账单</span>
-        </button>
+        <div class="dash-btn-group">
+          <button class="btn-primary small-btn ai-report-btn" @click="handleGenerateWeeklyReport" :disabled="isAiLoading">
+            <Sparkles :size="14" />
+            <span>{{ isAiLoading ? '生成周报中...' : '✨ AI 饮食周报' }}</span>
+          </button>
+          <button class="export-csv-btn" @click="exportCSV" title="导出 Excel/CSV 格式记账明细单">
+            <FileSpreadsheet :size="14" />
+            <span>导出 CSV</span>
+          </button>
+        </div>
       </div>
 
       <div class="dash-row main-stats">
@@ -220,21 +226,85 @@
         </form>
       </div>
     </div>
+
+    <!-- ✨ AI 饮食周报 Modal -->
+    <div v-if="showWeeklyReportModal" class="modal-overlay" @click.self="showWeeklyReportModal = false">
+      <div class="modal-content weekly-report-modal animate-fade-in">
+        <div class="report-header">
+          <Sparkles class="text-orange" :size="22" />
+          <h3 class="report-title">✨ 周周便当 · AI 饮食与财务周报</h3>
+          <button type="button" class="close-report-btn" @click="showWeeklyReportModal = false">✕</button>
+        </div>
+
+        <div v-if="weeklyReport" class="report-card-body">
+          <div class="report-badge-box">
+            <span class="badge-label">🏆 吃货称号认定：</span>
+            <h4 class="report-badge-title">{{ weeklyReport.title }}</h4>
+          </div>
+
+          <div class="report-item-card">
+            <div class="item-title">🍔 饮食偏好与频次分析：</div>
+            <p class="item-text">{{ weeklyReport.habitAnalysis }}</p>
+          </div>
+
+          <div class="report-item-card">
+            <div class="item-title">🥗 营养与口味均衡建议：</div>
+            <p class="item-text">{{ weeklyReport.healthInsight }}</p>
+          </div>
+
+          <div class="report-item-card">
+            <div class="item-title">💰 伙食开销与预算洞察：</div>
+            <p class="item-text">{{ weeklyReport.budgetInsight }}</p>
+          </div>
+        </div>
+
+        <div class="report-footer">
+          <button type="button" class="btn-primary flex-1" @click="showWeeklyReportModal = false">收下报告</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { Calendar, Plus, UtensilsCrossed, Edit3, Trash2, FileSpreadsheet, AlertCircle } from 'lucide-vue-next';
+import { Calendar, Plus, UtensilsCrossed, Edit3, Trash2, FileSpreadsheet, AlertCircle, Sparkles } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useCloudSync } from '../composables/useCloudSync';
+import { useBentoAI, type WeeklyReportResult } from '../composables/useBentoAI';
 import { soundEffects } from '../composables/useAudio';
 import { MEAL_CATEGORIES, type DailyRecord, type MealCategory, type RecordStatus } from '../types';
 
 const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings, visibleMealCategories, getTodayDateString } = useBentoStore();
 const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
 const { pushToCloud } = useCloudSync();
+const { isLoading: isAiLoading, generateWeeklyReport } = useBentoAI();
+
+const showWeeklyReportModal = ref(false);
+const weeklyReport = ref<WeeklyReportResult | null>(null);
+
+async function handleGenerateWeeklyReport() {
+  if (records.value.length === 0) {
+    alert('暂无打卡记录，快去记录或 Roll 一笔后再生成周报吧！');
+    return;
+  }
+  soundEffects.playTick(600);
+
+  const summary = records.value.slice(0, 15).map(r => ({
+    name: r.locationName,
+    cost: r.cost,
+    category: r.mealCategory,
+    tags: r.tags,
+  }));
+
+  const report = await generateWeeklyReport(summary, stats.value.monthlyTotal, settings.value.monthlyBudget);
+  if (report) {
+    weeklyReport.value = report;
+    showWeeklyReportModal.value = true;
+    soundEffects.playWinSound();
+  }
+}
 
 const todayStr = computed(() => getTodayDateString());
 
@@ -1184,5 +1254,101 @@ async function confirmDelete(id: string) {
   .admin-actions {
     justify-content: flex-start;
   }
+}
+
+/* ✨ AI 饮食周报 CSS */
+.dash-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-report-btn {
+  background: linear-gradient(135deg, #FF9933 0%, #FF6600 100%) !important;
+  box-shadow: 0 2px 8px rgba(255, 102, 0, 0.25);
+  white-space: nowrap;
+}
+
+.weekly-report-modal {
+  max-width: 480px;
+  width: 92%;
+  background: #FFFDF9;
+  border-radius: 20px;
+  padding: 20px;
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.report-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1E293B;
+  flex: 1;
+}
+
+.close-report-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #94A3B8;
+  cursor: pointer;
+}
+
+.report-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.report-badge-box {
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+  border: 1px solid #F59E0B;
+  border-radius: 12px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+.badge-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #78350F;
+}
+
+.report-badge-title {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #D97706;
+  margin-top: 4px;
+}
+
+.report-item-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.item-title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.item-text {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.report-footer {
+  display: flex;
 }
 </style>

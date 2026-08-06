@@ -158,6 +158,184 @@ serve(async (req) => {
       );
     }
 
+    // 3. 场景 3: AI “周周便当”每周饮食总结与健康省钱周报
+    if (action === 'weekly_report') {
+      const { recordsSummary, totalCost, monthlyBudget } = await req.json();
+
+      const systemPrompt = `你是一位精明幽默的“周周便当”饮食与财务顾问大师。请根据用户近期的打卡记录与消费统计，生成一份趣味卡片式周报 JSON。
+必须仅返回 JSON，格式如下：
+{
+  "title": "吃货称号（如：重口味碳水战士 / 极致省钱小能手 / 甜品解压大师）",
+  "habitAnalysis": "对用户饮食偏好和频次的幽默点评（60字左右）",
+  "healthInsight": "营养与口味均衡建议（50字左右）",
+  "budgetInsight": "结合消费与预算的理财小提示（50字左右）"
+}
+绝对不要包含 markdown 格式标记或额外多余文字。`;
+
+      const userMessage = `近打卡明细：${JSON.stringify(recordsSummary || [])}，阶段总花费：￥${totalCost || 0}，月度预算：${monthlyBudget ? `￥${monthlyBudget}` : '未设置'}`;
+
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: 0.5,
+          response_format: { type: 'json_object' }
+        }),
+      });
+
+      const data = await response.json();
+      const resultText = data.choices?.[0]?.message?.content || '{}';
+      let reportJson = {};
+      try {
+        reportJson = JSON.parse(resultText);
+      } catch (e) {
+        reportJson = {
+          title: '终极美食探险家',
+          habitAnalysis: '本周打卡丰富多元，每一餐都充满了对生活的热爱！',
+          healthInsight: '注意荤素搭配，多喝水，保持充沛活力。',
+          budgetInsight: '开销合理，继续保持理智而美味的饮食节奏！'
+        };
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, report: reportJson }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. 场景 4: AI “救救纠结症”双店 PK 辩论
+    if (action === 'food_debate') {
+      const { location1, location2 } = await req.json();
+      const loc1Name = location1?.name || '选项 A';
+      const loc2Name = location2?.name || '选项 B';
+
+      const systemPrompt = `你是一个美食辩论裁判。请让两位评委【热量快乐派】与【健康减脂派】针对两个餐厅选项展开 3 轮幽默互掐辩论，最后裁判给出结论。
+必须仅返回 JSON，格式如下：
+{
+  "debate": [
+    { "speaker": "热量快乐派", "avatar": "🍔", "content": "发言1" },
+    { "speaker": "健康减脂派", "avatar": "🥗", "content": "发言2" },
+    { "speaker": "热量快乐派", "avatar": "🍔", "content": "发言3" }
+  ],
+  "winner": "胜出的餐厅名称（必须严格是 '${loc1Name}' 或 '${loc2Name}' 之一）",
+  "verdict": "裁判的一句话终极推导结论（40字以内）"
+}
+绝对不要包含 markdown 格式标记或多余文字。`;
+
+      const userMessage = `辩论双方：选项A: ${loc1Name} (${location1?.tags?.join(',') || '美食'}) VS 选项B: ${loc2Name} (${location2?.tags?.join(',') || '美食'})`;
+
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: 0.7,
+          response_format: { type: 'json_object' }
+        }),
+      });
+
+      const data = await response.json();
+      const resultText = data.choices?.[0]?.message?.content || '{}';
+      let debateJson = {};
+      try {
+        debateJson = JSON.parse(resultText);
+      } catch (e) {
+        debateJson = {
+          debate: [
+            { speaker: "热量快乐派", avatar: "🍔", content: `选${loc1Name}啊，吃饱了才有力气工作！` },
+            { speaker: "健康减脂派", avatar: "🥗", content: `选${loc2Name}更清爽，身体无负担！` }
+          ],
+          winner: loc1Name,
+          verdict: `今天食神听从内心的召唤，建议选 ${loc1Name}！`
+        };
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, debateData: debateJson }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 5. 场景 5: AI 简易快手菜谱生成 (极低 Token 控成本版)
+    if (action === 'generate_recipe') {
+      const { dishName, imageText } = await req.json();
+      const targetDish = dishName || imageText || '快手便当菜';
+
+      const systemPrompt = `你是一位家庭快手菜大厨。请为指定的菜品生成一份一人食 15分钟简易菜谱 JSON。
+必须仅返回纯 JSON，格式严格如下：
+{
+  "dishName": "菜品名称",
+  "difficulty": "15分钟快手 🟢",
+  "servings": "1人份",
+  "ingredients": [
+    { "name": "主料/辅料名", "amount": "适量或克数" }
+  ],
+  "steps": [
+    "1. 步骤说明一",
+    "2. 步骤说明二",
+    "3. 步骤说明三"
+  ],
+  "chefTips": "💡 关键秘诀提示（一句话）"
+}
+限制步骤最多 3-4 步，简洁实用，绝对不要包含 markdown 格式标记或额外字句。`;
+
+      const userMessage = `请生成简易菜谱：${targetDish}`;
+
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          max_tokens: 450,
+          temperature: 0.4,
+          response_format: { type: 'json_object' }
+        }),
+      });
+
+      const data = await response.json();
+      const resultText = data.choices?.[0]?.message?.content || '{}';
+      let recipeJson = {};
+      try {
+        recipeJson = JSON.parse(resultText);
+      } catch (e) {
+        recipeJson = {
+          dishName: targetDish,
+          difficulty: "15分钟快手 🟢",
+          servings: "1人份",
+          ingredients: [{ name: "基础食材", amount: "适量" }],
+          steps: ["1. 食材洗净切块备用。", "2. 油锅烧热下锅大火翻炒至熟。", "3. 加少许盐调味即可出锅。"],
+          chefTips: "💡 大火快炒能保留食材新鲜口感。"
+        };
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, recipe: recipeJson }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: 'Bad Request', message: '未知的 action 指令' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

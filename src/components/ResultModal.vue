@@ -50,7 +50,13 @@
         </div>
 
         <div class="recommend-box">
-          <div class="box-title">💡 推荐菜品 / 建议：</div>
+          <div class="box-title-row">
+            <span class="box-title">💡 推荐菜品 / 建议：</span>
+            <button class="recipe-btn-link" type="button" @click="showRecipeModal = true">
+              <ChefHat :size="13" />
+              <span>🍳 查看 AI 简易菜谱</span>
+            </button>
+          </div>
           <div class="box-content">{{ resultData?.location.recommendedDish || '好吃的招牌主食' }}</div>
           
           <!-- 仅在配置了地址或导航链接时展示地图导航 -->
@@ -95,18 +101,28 @@
         </button>
       </div>
     </div>
+
+    <!-- 🍳 AI 简易快手菜谱 Modal -->
+    <RecipeModal 
+      :visible="showRecipeModal" 
+      :initialDishName="resultData?.location.recommendedDish || resultData?.location.name" 
+      @close="showRecipeModal = false" 
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { Check, RefreshCw, BookmarkPlus, Navigation, Sparkles } from 'lucide-vue-next';
+import { Check, RefreshCw, BookmarkPlus, Navigation, Sparkles, ChefHat } from 'lucide-vue-next';
+import RecipeModal from './RecipeModal.vue';
 import type { BentoLocation, MealCategory } from '../types';
 import { MEAL_CATEGORIES } from '../types';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useCloudSync } from '../composables/useCloudSync';
 import { useBentoAI } from '../composables/useBentoAI';
 import { soundEffects } from '../composables/useAudio';
+
+const showRecipeModal = ref(false);
 
 const props = defineProps<{
   visible: boolean;
@@ -475,6 +491,33 @@ function handleClose() {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+.box-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.recipe-btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #FFF7ED;
+  border: 1px solid #FFD8A8;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: #C2410C;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.15s ease;
+}
+
+.recipe-btn-link:hover {
+  transform: scale(1.05);
+  background: #FFE8CC;
 }
 
 @keyframes fadeIn {

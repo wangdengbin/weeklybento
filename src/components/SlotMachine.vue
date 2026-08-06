@@ -68,10 +68,18 @@
               <span>📅 按周不重复</span>
             </label>
           </div>
-          <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
-            <RotateCcw :size="13" />
-            重置池子 (已吃{{ drawnList.length }})
-          </button>
+          
+          <div class="pool-actions">
+            <button class="ai-debate-trigger-btn" type="button" @click="showFoodDebateModal = true" title="两家地点犹豫不决？让 AI 评估论选出结论">
+              <Sparkles :size="13" />
+              <span>🤼 AI 救救纠结症</span>
+            </button>
+
+            <button v-if="drawnList.length > 0" class="reset-link" @click="handleResetPool">
+              <RotateCcw :size="13" />
+              重置池子 (已吃{{ drawnList.length }})
+            </button>
+          </div>
         </div>
 
         <!-- 主老虎机机器 Frame -->
@@ -336,6 +344,13 @@
         </form>
       </div>
     </div>
+
+    <!-- 🤼 AI 救救纠结症 (双店 PK 辩论) Modal -->
+    <FoodDebateModal 
+      :visible="showFoodDebateModal" 
+      :locations="locations" 
+      @close="showFoodDebateModal = false" 
+    />
   </div>
 </template>
 
@@ -343,10 +358,13 @@
 import { ref, computed } from 'vue';
 import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck, Search, Plus } from 'lucide-vue-next';
 import confetti from 'canvas-confetti';
+import FoodDebateModal from './FoodDebateModal.vue';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { soundEffects } from '../composables/useAudio';
 import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
+
+const showFoodDebateModal = ref(false);
 
 const emit = defineEmits(['roll-complete']);
 
@@ -1628,5 +1646,31 @@ function handleResetPool() {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+.pool-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-debate-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
+  border: 1px dashed #FF9933;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #C2410C;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-debate-trigger-btn:hover {
+  transform: scale(1.05);
+  background: linear-gradient(135deg, #FFEDD5 0%, #FDBA74 100%);
 }
 </style>
