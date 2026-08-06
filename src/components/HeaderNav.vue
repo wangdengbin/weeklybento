@@ -37,6 +37,17 @@
           </span>
         </div>
 
+        <!-- ⚡ 云端实时同步状态指示 -->
+        <span
+          v-if="realtimeStatus === 'connecting' || realtimeStatus === 'subscribed' || realtimeStatus === 'error'"
+          class="realtime-badge"
+          :class="'rt-' + realtimeStatus"
+          :title="realtimeStatusText"
+        >
+          <span class="rt-dot"></span>
+          <span class="rt-label">{{ realtimeStatusText }}</span>
+        </span>
+
         <!-- 账号登录/身份 状态按钮 -->
         <button 
           class="icon-btn auth-btn" 
@@ -114,6 +125,7 @@ import { Volume2, VolumeX, Users, User, UserCheck, ChevronDown, SlidersHorizonta
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useAuth } from '../composables/useAuth';
+import { useCloudSync } from '../composables/useCloudSync';
 import { soundEffects } from '../composables/useAudio';
 
 const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-modal', 'open-scan-modal']);
@@ -121,6 +133,16 @@ const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-moda
 const { settings, switchMode } = useBentoStore();
 const { team, myTeams } = useTeamWorkspace();
 const { isAnonymous, userEmail } = useAuth();
+const { realtimeStatus } = useCloudSync();
+
+const realtimeStatusText = computed(() => {
+  switch (realtimeStatus.value) {
+    case 'connecting': return '同步连接中';
+    case 'subscribed': return '实时同步中';
+    case 'error': return '同步已离线';
+    default: return '';
+  }
+});
 
 const clickCount = ref(0);
 let clickTimer: number | null = null;
@@ -432,5 +454,75 @@ function openAdminModal() {
 
 .text-gray {
   color: var(--text-muted);
+}
+
+/* ⚡ 云端实时同步状态指示 */
+.realtime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.rt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rt-subscribed {
+  background: rgba(240, 253, 244, 0.9);
+  border-color: #86EFAC;
+  color: #166534;
+}
+
+.rt-subscribed .rt-dot {
+  background: #22C55E;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+  animation: rtPulse 2.4s infinite;
+}
+
+.rt-connecting {
+  background: rgba(255, 251, 235, 0.9);
+  border-color: #FCD34D;
+  color: #92400E;
+}
+
+.rt-connecting .rt-dot {
+  background: #F59E0B;
+  animation: rtPulse 1.1s infinite;
+}
+
+.rt-error {
+  background: rgba(254, 242, 242, 0.9);
+  border-color: #FCA5A5;
+  color: #991B1B;
+}
+
+.rt-error .rt-dot {
+  background: #EF4444;
+}
+
+@keyframes rtPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.8); }
+}
+
+/* 小屏只显示圆点，节省空间 */
+@media (max-width: 580px) {
+  .rt-label {
+    display: none;
+  }
+  .realtime-badge {
+    padding: 3px 7px;
+  }
 }
 </style>

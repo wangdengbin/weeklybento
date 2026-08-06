@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue';
 import { ensureAnonymousSession, isSupabaseConfigured, supabase } from '../lib/supabase';
+import { useRealtimeSync } from './useRealtimeSync';
 import { getErrorMessage } from '../utils/error';
 import { useBentoStore } from './useBentoStore';
 import type { AppSettings, BentoLocation, DailyRecord } from '../types';
@@ -13,6 +14,55 @@ let autoPushTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;
 let pendingPush = false;
 let isApplyingCloud = false;
+
+// ---- Realtime 多端实时同步（复用 useRealtimeSync 单例）----
+const { status: realtimeStatus, subscribe: subscribeRealtime, unsubscribe: teardownRealtime } = useRealtimeSync();
+const REALTIME_TABLES = [
+  { table: 'user_records' },
+  { table: 'user_locations' },
+  { table: 'user_settings' },
+  { table: 'user_deletions' },
+];
+
+// 回声抑制：云端行不新于本地（严格大于才算新）则视为自己写入的回声，不触发拉取。
+// 用严格 `>` 而非 `>=`：同毫秒但内容不同（极端并发）时也会触发一次幂等拉取，保证收敛。
+function isSelfEcho(table: string, row: any, eventType: string): boolean {
+  if (eventType === 'DELETE' || !row) return false;
+  if (typeof row.updated_at_ms !== 'number') return false;
+  const { records, locations, settings } = useBentoStore();
+  if (table === 'user_records') {
+    const local = records.value.find(item => item.id === row.id);
+    return !!local && (local.updatedAt ?? 0) >= row.updated_at_ms;
+  }
+  if (table === 'user_locations') {
+    const local = locations.value.find(item => item.id === row.id);
+    return !!local && (local.updatedAt ?? 0) >= row.updated_at_ms;
+  }
+  if (table === 'user_settings') {
+    return (settings.value.updatedAt ?? 0) >= row.updated_at_ms;
+  }
+  return false;
+}
+
+// 收到 Realtime 事件批（已由 useRealtimeSync 防抖累积为数组）→ 触发一次云端合并拉取
+function handleRealtimeChange(payloads: any[]) {
+  if (isApplyingCloud) return; // 正在应用云端合并时忽略
+  // 任一事件非自身回声（真实远端变更）即拉取一次（全量合并，一次足够）
+  const hasRealChange = payloads.some(p => !isSelfEcho(p.table, p.new, p.eventType));
+  if (!hasRealChange) return;
+  pullFromCloud(true);
+}
+
+// 订阅当前用户 4 张同步表的变更，实现多端真实时刷新（委托 useRealtimeSync 管理连接与状态）
+function setupRealtime(userId: string) {
+  if (!supabase || !userId) return;
+  subscribeRealtime({
+    userId,
+    tables: REALTIME_TABLES,
+    onChange: handleRealtimeChange,
+    debounceMs: 400,
+  });
+}
 
 interface SyncResult {
   success: boolean;
@@ -215,7 +265,8 @@ async function pushToCloud(silent = false): Promise<SyncResult> {
 
     const localSettingsTs = settings.value.updatedAt || 0;
     const cloudSettingsTs = setCloud.data?.updated_at_ms || 0;
-    const pushSettings = localSettingsTs >= cloudSettingsTs;
+    // 严格大于：避免“云端已等于本地”时反复 upsert，产生 Realtime 回声死循环
+    const pushSettings = localSettingsTs > cloudSettingsTs;
 
     const batch: PromiseLike<any>[] = [];
     if (recRows.length > 0) {
@@ -371,14 +422,20 @@ function setupAuthListener() {
     const { setPersonalStorageNamespace } = useBentoStore();
     if (event === 'SIGNED_OUT') {
       lastUserId = '';
+      teardownRealtime();
       setPersonalStorageNamespace(null);
       return;
     }
     if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && uid && uid !== lastUserId) {
       lastUserId = uid;
       setPersonalStorageNamespace(uid);
-      // 等账号数据分区切换完成后，再做一次云端合并
-      setTimeout(() => { pullFromCloud(true); }, 200);
+      // 等账号数据分区切换完成后，再做一次云端合并 + 建立实时订阅
+      setTimeout(() => {
+        // 守卫：200ms 内已登出或切换账号则放弃过期订阅
+        if (lastUserId !== uid) return;
+        pullFromCloud(true);
+        setupRealtime(uid);
+      }, 200);
     }
   });
 }
@@ -396,6 +453,7 @@ async function initializePersonalSync() {
     const { setPersonalStorageNamespace } = useBentoStore();
     setPersonalStorageNamespace(userId);
     await pullFromCloud(true);
+    setupRealtime(userId);
   }
 }
 
@@ -404,8 +462,11 @@ export function useCloudSync() {
     isSyncing,
     syncLog,
     lastSyncedAt,
+    realtimeStatus,
     pushToCloud,
     pullFromCloud,
     initializePersonalSync,
+    setupRealtime,
+    teardownRealtime,
   };
 }
