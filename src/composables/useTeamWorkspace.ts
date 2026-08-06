@@ -41,29 +41,61 @@ const defaultPermissions: TeamPermissions = {
 
 const teamPermissions = ref<TeamPermissions>({ ...defaultPermissions });
 
-function loadTeamPermissions(teamId?: string) {
+// 权限缓存：本地优先展示，云端为准（跨设备一致）
+function cachePermissions(teamId: string, perms: TeamPermissions) {
+  try {
+    localStorage.setItem(`weekly_bento_team_perms_${teamId}`, JSON.stringify(perms));
+  } catch (e) {}
+}
+
+async function loadTeamPermissions(teamId?: string) {
   if (!teamId) {
     teamPermissions.value = { ...defaultPermissions };
     return;
   }
+  // 1. 先用本地缓存立即渲染（避免闪烁）
   try {
-    const key = `weekly_bento_team_perms_${teamId}`;
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(`weekly_bento_team_perms_${teamId}`);
     if (raw) {
       teamPermissions.value = { ...defaultPermissions, ...JSON.parse(raw) };
-      return;
+    } else {
+      teamPermissions.value = { ...defaultPermissions };
     }
-  } catch (e) {}
-  teamPermissions.value = { ...defaultPermissions };
+  } catch (e) {
+    teamPermissions.value = { ...defaultPermissions };
+  }
+
+  // 2. 云端优先：拉取服务端权限并覆盖本地缓存
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.rpc('get_team_permissions', { p_team_id: teamId });
+      if (!error && data && typeof data === 'object') {
+        teamPermissions.value = { ...defaultPermissions, ...(data as Partial<TeamPermissions>) };
+        cachePermissions(teamId, teamPermissions.value);
+      }
+    } catch (e) {
+      console.warn('[Team Perms] 云端权限拉取失败，使用本地缓存:', e);
+    }
+  }
 }
 
 function updateTeamPermissions(newPerms: Partial<TeamPermissions>) {
   if (!team.value) return;
   teamPermissions.value = { ...teamPermissions.value, ...newPerms };
-  try {
-    const key = `weekly_bento_team_perms_${team.value.id}`;
-    localStorage.setItem(key, JSON.stringify(teamPermissions.value));
-  } catch (e) {}
+  cachePermissions(team.value.id, teamPermissions.value);
+  // 异步同步云端，实现跨设备权限一致
+  if (supabase) {
+    (async () => {
+      try {
+        await supabase.rpc('update_team_permissions', {
+          p_team_id: team.value!.id,
+          p_permissions: teamPermissions.value,
+        });
+      } catch (err) {
+        console.warn('[Team Perms] 云端权限同步失败:', err);
+      }
+    })();
+  }
 }
 
 function prepareTags(tags: string[] = [], visible?: boolean): string[] {
@@ -237,7 +269,7 @@ async function loadWorkspace() {
   }
 
   await fetchTeamMembers();
-  loadTeamPermissions(team.value.id);
+  await loadTeamPermissions(team.value.id);
 }
 
 function startRealtime() {
@@ -556,6 +588,17 @@ async function deleteTeamRecord(id: string) {
   await loadWorkspace();
 }
 
+// 移除团队成员（owner/admin），实现“踢人”能力
+async function removeTeamMember(targetUserId: string) {
+  if (!supabase || !team.value) throw new Error('请先创建或加入团队');
+  const { error } = await supabase.rpc('remove_team_member', {
+    p_team_id: team.value.id,
+    p_user_id: targetUserId,
+  });
+  if (error) throw error;
+  await fetchTeamMembers();
+}
+
 const canManage = computed(() => team.value?.role === 'owner' || team.value?.role === 'admin');
 const isOwner = computed(() => team.value?.role === 'owner');
 
@@ -603,6 +646,7 @@ export function useTeamWorkspace() {
     batchDeleteLocations,
     addOrUpdateTeamRecord,
     deleteTeamRecord,
+    removeTeamMember,
     leaveTeam,
     deleteTeam,
     refresh: loadWorkspace,

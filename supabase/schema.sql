@@ -7,8 +7,12 @@ create table if not exists public.teams (
   name text not null check (char_length(name) between 1 and 40),
   invite_token_hash text not null,
   created_by uuid not null references auth.users(id),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  permissions jsonb not null default '{}'::jsonb
 );
+
+-- 幂等迁移：老库补充 permissions 列（可重复执行）
+alter table public.teams add column if not exists permissions jsonb not null default '{}'::jsonb;
 
 create table if not exists public.team_members (
   team_id uuid not null references public.teams(id) on delete cascade,
@@ -233,6 +237,42 @@ begin
 end;
 $$;
 
+-- 读取团队权限配置（成员可读）
+create or replace function public.get_team_permissions(p_team_id uuid)
+returns jsonb language plpgsql security definer set search_path = public
+as $$
+begin
+  if not public.is_team_member(p_team_id) then raise exception 'team membership required'; end if;
+  return (select coalesce(permissions, '{}'::jsonb) from teams where id = p_team_id);
+end;
+$$;
+
+-- 更新团队权限配置（owner/admin 可写），写入云端以便跨设备一致
+create or replace function public.update_team_permissions(p_team_id uuid, p_permissions jsonb)
+returns jsonb language plpgsql security definer set search_path = public
+as $$
+begin
+  if not public.can_manage_team(p_team_id) then raise exception 'manager permission required'; end if;
+  update teams set permissions = coalesce(p_permissions, '{}'::jsonb) where id = p_team_id;
+  return coalesce(p_permissions, '{}'::jsonb);
+end;
+$$;
+
+-- 移除团队成员（owner/admin 可操作，不能移除自己或 owner）
+create or replace function public.remove_team_member(p_team_id uuid, p_user_id uuid)
+returns void language plpgsql security definer set search_path = public
+as $$
+declare
+  target_role text;
+begin
+  if not public.can_manage_team(p_team_id) then raise exception 'manager permission required'; end if;
+  if auth.uid() = p_user_id then raise exception 'cannot remove yourself'; end if;
+  select role into target_role from team_members where team_id = p_team_id and user_id = p_user_id;
+  if target_role = 'owner' then raise exception 'cannot remove the team owner'; end if;
+  delete from team_members where team_id = p_team_id and user_id = p_user_id;
+end;
+$$;
+
 create or replace function public.rotate_team_invite(p_team_id uuid)
 returns text language plpgsql security definer set search_path = public, extensions
 as $$
@@ -314,6 +354,9 @@ grant execute on function public.get_my_teams() to authenticated;
 grant execute on function public.get_team_members(uuid) to authenticated;
 grant execute on function public.rotate_team_invite(uuid) to authenticated;
 grant execute on function public.roll_team(uuid, boolean) to authenticated;
+grant execute on function public.get_team_permissions(uuid) to authenticated;
+grant execute on function public.update_team_permissions(uuid, jsonb) to authenticated;
+grant execute on function public.remove_team_member(uuid, uuid) to authenticated;
 
 revoke execute on function public.create_team(text, jsonb) from public, anon;
 revoke execute on function public.join_team(text, text) from public, anon;
@@ -322,6 +365,9 @@ revoke execute on function public.get_my_teams() from public, anon;
 revoke execute on function public.get_team_members(uuid) from public, anon;
 revoke execute on function public.rotate_team_invite(uuid) from public, anon;
 revoke execute on function public.roll_team(uuid, boolean) from public, anon;
+revoke execute on function public.get_team_permissions(uuid) from public, anon;
+revoke execute on function public.update_team_permissions(uuid, jsonb) from public, anon;
+revoke execute on function public.remove_team_member(uuid, uuid) from public, anon;
 
 alter publication supabase_realtime drop table public.team_locations;
 alter publication supabase_realtime add table public.team_locations;

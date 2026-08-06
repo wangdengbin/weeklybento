@@ -93,11 +93,22 @@
                   <div class="members-list">
                     <div v-for="m in members" :key="m.user_id" class="member-item">
                       <div class="member-left">
-                        <span class="member-dot"></span>
+                        <span class="member-avatar" :style="{ background: avatarColor(m.email) }">{{ avatarText(m.email) }}</span>
                         <span class="member-email" :title="m.email">{{ m.email }}</span>
                         <span v-if="m.is_me" class="me-badge">我</span>
                       </div>
-                      <span class="member-role-badge" :class="m.role">{{ getRoleLabel(m.role) }}</span>
+                      <div class="member-right">
+                        <span class="member-role-badge" :class="m.role">{{ getRoleLabel(m.role) }}</span>
+                        <button
+                          v-if="canManage && !m.is_me && m.role !== 'owner'"
+                          class="remove-member-btn"
+                          type="button"
+                          :disabled="isLoading"
+                          @click="handleRemoveMember(m)"
+                        >
+                          移除
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -248,12 +259,15 @@ import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { getErrorMessage } from '../utils/error';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
+import { useToast } from '../composables/useToast';
+
+const { success: toastSuccess, info: toastInfo, confirm: toastConfirm } = useToast();
 
 const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits(['close', 'open-auth-modal']);
 const { locations: personalLocations, switchMode } = useBentoStore();
 const { isAnonymous } = useAuth();
-const { team, myTeams, members, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl, buildInviteUrl, openTeam, deleteTeam, leaveTeam, switchActiveTeam, teamPermissions, updateTeamPermissions } = useTeamWorkspace();
+const { team, myTeams, members, isConfigured, isLoading, errorMessage, canManage, createTeam, createInviteUrl, buildInviteUrl, openTeam, deleteTeam, leaveTeam, switchActiveTeam, teamPermissions, updateTeamPermissions, removeTeamMember } = useTeamWorkspace();
 
 function handleToggleRerollPerm(e: Event) {
   const target = e.target as HTMLInputElement;
@@ -278,6 +292,35 @@ const inviteTextArea = ref<HTMLTextAreaElement | null>(null);
 
 function getRoleLabel(role: string) {
   return { owner: '所有者', admin: '管理员', member: '成员', viewer: '只读成员' }[role] || '成员';
+}
+
+function avatarText(email: string) {
+  const e = (email || '?').trim();
+  return (e.charAt(0) || '?').toUpperCase();
+}
+
+function avatarColor(email: string) {
+  const palette = ['#FF6B35', '#10B981', '#8B5CF6', '#EC4899', '#3B82F6', '#F59E0B', '#14B8A6'];
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) hash = email.charCodeAt(i) + ((hash << 5) - hash);
+  return palette[Math.abs(hash) % palette.length];
+}
+
+async function handleRemoveMember(m: { user_id: string; email: string }) {
+  const ok = await toastConfirm({
+    title: '移除成员',
+    message: `确定将成员「${m.email}」移出搭子圈吗？其本地菜单不会被删除，可再次通过邀请加入。`,
+    danger: true,
+    confirmText: '移除',
+  });
+  if (!ok) return;
+  errorMessage.value = '';
+  try {
+    await removeTeamMember(m.user_id);
+    toastSuccess(`已移除成员 ${m.email}`);
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err);
+  }
 }
 
 function handleOpenAuth() {
@@ -371,6 +414,19 @@ async function shareTeam() {
   if (!inviteText.value) {
     await generateInviteText();
   }
+  if (!inviteText.value) return;
+
+  // 移动端优先调用系统分享面板 (Web Share API)
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: '午餐搭子圈邀请', text: inviteText.value });
+      toastSuccess('已通过系统分享面板发送邀请');
+      return;
+    } catch (e) {
+      // 用户取消分享等场景，降级为复制
+    }
+  }
+
   selectInviteText();
   let success = false;
   try {
@@ -387,38 +443,50 @@ async function shareTeam() {
   if (success) {
     copied.value = true;
     window.setTimeout(() => { copied.value = false; }, 2500);
+    toastSuccess('邀请链接已复制！');
   } else {
-    alert('文本已自动选中！请按 Ctrl+C / Cmd+C 直接复制。');
+    toastInfo('文本已自动选中！请按 Ctrl+C / Cmd+C 直接复制。');
   }
 }
 
 async function handleDeleteTeam(t: { id: string; name: string }) {
-  if (confirm(`⚠️ 危险操作：确定要解散搭子圈“${t.name}”吗？此操作不可恢复！`)) {
-    soundEffects.playTick(300);
-    errorMessage.value = '';
-    try {
-      await deleteTeam(t.id);
-      if (myTeams.value.length === 0) {
-        switchMode('personal');
-      }
-    } catch (err) {
-      errorMessage.value = getErrorMessage(err);
+  const ok = await toastConfirm({
+    title: '解散搭子圈',
+    message: `⚠️ 危险操作：确定要解散搭子圈“${t.name}”吗？此操作不可恢复！`,
+    danger: true,
+    confirmText: '解散',
+  });
+  if (!ok) return;
+  soundEffects.playTick(300);
+  errorMessage.value = '';
+  try {
+    await deleteTeam(t.id);
+    toastSuccess(`搭子圈“${t.name}”已解散`);
+    if (myTeams.value.length === 0) {
+      switchMode('personal');
     }
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err);
   }
 }
 
 async function handleLeaveTeam(t: { id: string; name: string }) {
-  if (confirm(`确定要退出搭子圈“${t.name}”吗？`)) {
-    soundEffects.playTick(400);
-    errorMessage.value = '';
-    try {
-      await leaveTeam(t.id);
-      if (myTeams.value.length === 0) {
-        switchMode('personal');
-      }
-    } catch (err) {
-      errorMessage.value = getErrorMessage(err);
+  const ok = await toastConfirm({
+    title: '退出搭子圈',
+    message: `确定要退出搭子圈“${t.name}”吗？`,
+    confirmText: '退出',
+  });
+  if (!ok) return;
+  soundEffects.playTick(400);
+  errorMessage.value = '';
+  try {
+    await leaveTeam(t.id);
+    toastSuccess(`已退出搭子圈“${t.name}”`);
+    if (myTeams.value.length === 0) {
+      switchMode('personal');
     }
+  } catch (err) {
+    errorMessage.value = getErrorMessage(err);
   }
 }
 </script>
@@ -550,8 +618,31 @@ async function handleLeaveTeam(t: { id: string; name: string }) {
   gap: 6px;
   min-width: 0;
 }
-.member-dot { width: 6px; height: 6px; border-radius: 50%; background: #22C55E; flex-shrink: 0; }
-.member-email { font-weight: 600; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.member-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.member-email { font-weight: 600; color: #1E293B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.member-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.remove-member-btn {
+  border: 1px solid #FCA5A5;
+  background: #FEF2F2;
+  color: #DC2626;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.remove-member-btn:disabled { opacity: 0.5; cursor: wait; }
 .me-badge { font-size: 10px; font-weight: 800; background: #DC2626; color: #FFFFFF; padding: 0 4px; border-radius: 3px; }
 .member-role-badge {
   font-size: 10px;
