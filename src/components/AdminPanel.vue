@@ -229,11 +229,55 @@
     <div v-if="showLocModal" class="modal-overlay" @click.self="showLocModal = false">
       <div class="modal-content">
         <h3 class="modal-title">{{ isEditLoc ? '编辑午餐地点' : '新增午餐地点' }}</h3>
+        
+        <!-- ✨ AI 智能识别粘贴卡片 -->
+        <div class="ai-parse-card">
+          <div class="ai-card-title">
+            <Sparkles :size="15" class="text-orange" />
+            <span>✨ AI 智能粘贴/识字填充</span>
+          </div>
+          <div class="ai-input-row">
+            <input 
+              type="text" 
+              v-model="aiInputText" 
+              placeholder="如粘贴：科技园小杨生煎，人均25，推荐鲜肉生煎" 
+              class="input-field ai-input flex-1"
+              @keyup.enter="handleAiParse"
+            />
+            <button 
+              type="button" 
+              class="btn-primary small-btn ai-btn" 
+              :disabled="isAiParsing || !aiInputText.trim()"
+              @click="handleAiParse"
+            >
+              {{ isAiParsing ? '识别中...' : 'AI 填表' }}
+            </button>
+          </div>
+          <p v-if="aiError" class="ai-error-msg">{{ aiError }}</p>
+        </div>
+
         <form @submit.prevent="saveLoc" class="loc-form">
           <div class="form-row-inline">
-            <div class="form-item short">
+            <div class="form-item short relative-container">
               <label>Emoji 图标：</label>
-              <input type="text" v-model="locForm.emoji" required class="input-field center-text" />
+              <div class="emoji-input-wrapper">
+                <input type="text" v-model="locForm.emoji" required class="input-field center-text emoji-input" />
+                <button 
+                  type="button" 
+                  class="emoji-picker-btn" 
+                  @click="showEmojiPicker = !showEmojiPicker"
+                  title="点击挑选常用 Emoji"
+                >
+                  😃
+                </button>
+              </div>
+
+              <!-- 弹出 Emoji 选择器 -->
+              <EmojiPicker 
+                v-if="showEmojiPicker" 
+                @select="onEmojiSelect" 
+                @close="showEmojiPicker = false" 
+              />
             </div>
             <div class="form-item flex-1">
               <label>地点/餐厅名称：</label>
@@ -367,13 +411,15 @@
 import { ref, computed } from 'vue';
 import { 
   Crown, LogOut, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet, Eye, EyeOff,
-  Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText 
+  Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText, Sparkles 
 } from 'lucide-vue-next';
+import EmojiPicker from './EmojiPicker.vue';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useAdmin } from '../composables/useAdmin';
 import { useAuth } from '../composables/useAuth';
 import { useCloudSync } from '../composables/useCloudSync';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
+import { useBentoAI } from '../composables/useBentoAI';
 import { soundEffects } from '../composables/useAudio';
 import { parseBatchLocationsText } from '../utils/parseBatchText';
 import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
@@ -535,6 +581,33 @@ const locForm = ref<BentoLocation>({
   createdAt: Date.now()
 });
 const tagsInput = ref('');
+
+// AI & Emoji Picker 逻辑
+const showEmojiPicker = ref(false);
+const aiInputText = ref('');
+const { isLoading: isAiParsing, aiError, parseLocationText } = useBentoAI();
+
+function onEmojiSelect(emoji: string) {
+  locForm.value.emoji = emoji;
+  if (settings.value.soundEnabled) soundEffects.playTick(700);
+}
+
+async function handleAiParse() {
+  if (!aiInputText.value.trim()) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(600);
+  
+  const res = await parseLocationText(aiInputText.value);
+  if (res) {
+    if (res.name) locForm.value.name = res.name;
+    if (res.emoji) locForm.value.emoji = res.emoji;
+    if (res.priceRange) locForm.value.priceRange = res.priceRange;
+    if (res.recommendedDish) locForm.value.recommendedDish = res.recommendedDish;
+    if (res.tags && res.tags.length > 0) {
+      tagsInput.value = res.tags.join(', ');
+    }
+    aiInputText.value = '';
+  }
+}
 
 function handleLogout() {
   logout();
@@ -1383,5 +1456,76 @@ function handleImportFile(event: Event) {
 
 .cat-checkbox-item input {
   accent-color: #FF6B00;
+}
+
+/* ✨ AI 智能识别卡片样式 */
+.ai-parse-card {
+  background: linear-gradient(135deg, #FFF7ED 0%, #FFF3E6 100%);
+  border: 1px dashed #FF9933;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.ai-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #C2410C;
+  margin-bottom: 8px;
+}
+
+.ai-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-input {
+  background: #FFFFFF !important;
+  font-size: 13px !important;
+}
+
+.ai-btn {
+  white-space: nowrap;
+  background: linear-gradient(135deg, #FF9933 0%, #FF6600 100%) !important;
+  box-shadow: 0 2px 8px rgba(255, 102, 0, 0.25);
+}
+
+.ai-error-msg {
+  font-size: 12px;
+  color: #DC2626;
+  margin-top: 6px;
+}
+
+/* Emoji Picker & Input */
+.relative-container {
+  position: relative;
+}
+
+.emoji-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.emoji-input {
+  width: 60px !important;
+}
+
+.emoji-picker-btn {
+  background: #FFF3E6;
+  border: 1px solid #FFD8A8;
+  border-radius: 8px;
+  font-size: 16px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.emoji-picker-btn:hover {
+  transform: scale(1.1);
+  background: #FFE8CC;
 }
 </style>

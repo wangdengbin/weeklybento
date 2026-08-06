@@ -84,6 +84,12 @@ VITE_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
 
 团队邀请链接包含团队 ID 和可轮换的邀请码。详细的后台用户活跃监控及数据统计 SQL 查询可参考 [Supabase 后台用户与数据监控指南](doc/SUPABASE_ADMIN_AND_USERS.md)。
 
+### 🤖 AI 能力与 Edge Function 配置 (DeepSeek)
+
+项目集成了 **✨ AI 智能识图/文本解析填表** 与 **🔮 AI 食神独家点评** 两大 AI 场景，通过 Supabase Edge Function (`bento-ai`) 实现转发与防盗刷限流。
+
+- **云端部署教程**：包含网页后台直接粘贴发布与 CLI 命令部署，详见 [Supabase Edge Functions & DeepSeek AI 配置与云端部署指南](doc/SUPABASE_EDGE_FUNCTIONS_AI.md)。
+
 ### 个人账单云同步
 
 - 个人模式（账单、地点池、设置）默认通过 Supabase 按登录用户同步，不再依赖 JSONBin。

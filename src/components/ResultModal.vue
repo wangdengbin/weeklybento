@@ -16,6 +16,32 @@
           ✨ {{ resultData?.fortune || '美味之选！' }}
         </div>
 
+        <!-- ✨ AI 食神点评 & 吃货运势卡片 -->
+        <div class="ai-review-section">
+          <button 
+            v-if="!aiReview" 
+            type="button" 
+            class="ai-review-trigger-btn"
+            :disabled="isAiLoading"
+            @click="handleFetchAiReview"
+          >
+            <Sparkles :size="14" class="sparkle-icon" />
+            <span>{{ isAiLoading ? '食神思考中...' : '✨ 请 AI 食神为你点评打分' }}</span>
+          </button>
+
+          <div v-else class="ai-review-card animate-fade-in">
+            <div class="ai-review-header">
+              <Sparkles :size="14" class="text-orange" />
+              <span>🔮 AI 食神独家点评</span>
+            </div>
+            <div class="ai-review-body">
+              {{ aiReview }}
+            </div>
+          </div>
+          
+          <p v-if="aiError" class="ai-error-text">{{ aiError }}</p>
+        </div>
+
         <div class="tags-row">
           <span v-for="tag in resultData?.location.tags" :key="tag" class="tag-pill">
             # {{ tag }}
@@ -74,11 +100,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { Check, RefreshCw, BookmarkPlus, Navigation } from 'lucide-vue-next';
+import { Check, RefreshCw, BookmarkPlus, Navigation, Sparkles } from 'lucide-vue-next';
 import type { BentoLocation, MealCategory } from '../types';
 import { MEAL_CATEGORIES } from '../types';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useCloudSync } from '../composables/useCloudSync';
+import { useBentoAI } from '../composables/useBentoAI';
 import { soundEffects } from '../composables/useAudio';
 
 const props = defineProps<{
@@ -91,17 +118,38 @@ const emit = defineEmits(['close', 'confirm-record', 'reroll']);
 
 const { markLocationAsDrawn, addDailyRecord, settings, selectedCategory } = useBentoStore();
 const { pushToCloud } = useCloudSync();
+const { isLoading: isAiLoading, aiError, generateFoodReview } = useBentoAI();
 
 const currentCatKey = computed(() => props.category || selectedCategory.value);
 const categoryMeta = computed(() => MEAL_CATEGORIES.find(c => c.key === currentCatKey.value));
 
 const inputCost = ref<number | undefined>(undefined);
+const aiReview = ref<string>('');
 
 watch(() => props.visible, (val) => {
   if (val) {
     inputCost.value = undefined;
+    aiReview.value = '';
   }
 });
+
+async function handleFetchAiReview() {
+  if (!props.resultData) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(700);
+
+  const loc = props.resultData.location;
+  const review = await generateFoodReview({
+    locationName: loc.name,
+    tags: loc.tags,
+    recommendedDish: loc.recommendedDish,
+    mealCategory: categoryMeta.value?.name,
+  });
+
+  if (review) {
+    aiReview.value = review;
+    if (settings.value.soundEnabled) soundEffects.playWinSound();
+  }
+}
 
 function openNavigation(loc: BentoLocation) {
   if (loc.mapUrl) {
@@ -356,5 +404,81 @@ function handleClose() {
 
 .nav-btn:hover {
   background: #DBEAFE;
+}
+
+/* ✨ AI 食神点评样式 */
+.ai-review-section {
+  margin: 10px 0 14px 0;
+}
+
+.ai-review-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
+  border: 1px dashed #FF9933;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #C2410C;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(255, 153, 51, 0.15);
+}
+
+.ai-review-trigger-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  background: linear-gradient(135deg, #FFEDD5 0%, #FDBA74 100%);
+}
+
+.ai-review-trigger-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.sparkle-icon {
+  color: #FF6600;
+}
+
+.ai-review-card {
+  background: linear-gradient(135deg, #FFFBEB 0%, #FFF7ED 100%);
+  border: 1px solid #FDE68A;
+  border-radius: 12px;
+  padding: 10px 14px;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.12);
+}
+
+.ai-review-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #D97706;
+  margin-bottom: 4px;
+}
+
+.ai-review-body {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #78350F;
+  font-weight: 600;
+}
+
+.ai-error-text {
+  font-size: 0.75rem;
+  color: #EF4444;
+  margin-top: 4px;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
