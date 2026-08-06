@@ -230,27 +230,33 @@
       <div class="modal-content">
         <h3 class="modal-title">{{ isEditLoc ? '编辑午餐地点' : '新增午餐地点' }}</h3>
         
-        <!-- ✨ AI 智能识别粘贴卡片 -->
-        <div class="ai-parse-card">
+        <!-- ✨ AI 智能识别粘贴/识图填表卡片 -->
+        <div class="ai-parse-card" @paste="handleAdminPaste">
           <div class="ai-card-title">
             <Sparkles :size="15" class="text-orange" />
-            <span>✨ AI 智能粘贴/识字填充</span>
+            <span>✨ AI 智能识图/截图自动填表</span>
+            <span v-if="aiImgSizeText" class="compress-badge-sm">{{ aiImgSizeText }}</span>
           </div>
           <div class="ai-input-row">
             <input 
               type="text" 
               v-model="aiInputText" 
-              placeholder="如粘贴：科技园小杨生煎，人均25，推荐鲜肉生煎" 
+              placeholder="贴描述文字或在此 Ctrl+V 粘贴截图/小票照片" 
               class="input-field ai-input flex-1"
               @keyup.enter="handleAiParse"
             />
+            <label class="btn-secondary small-btn upload-img-btn" title="点击选择美团/大众点评/小票截图照片">
+              <Upload :size="13" />
+              <span>{{ isAiImgProcessing ? '识图中...' : '选择照片' }}</span>
+              <input type="file" accept="image/*" @change="handleAdminFileSelect" hidden />
+            </label>
             <button 
               type="button" 
               class="btn-primary small-btn ai-btn" 
-              :disabled="isAiParsing || !aiInputText.trim()"
+              :disabled="isAiParsing || isAiImgProcessing || (!aiInputText.trim() && !isAiImgProcessing)"
               @click="handleAiParse"
             >
-              {{ isAiParsing ? '识别中...' : 'AI 填表' }}
+              {{ isAiParsing ? '识别中...' : '文字填表' }}
             </button>
           </div>
           <p v-if="aiError" class="ai-error-msg">{{ aiError }}</p>
@@ -421,6 +427,7 @@ import { useCloudSync } from '../composables/useCloudSync';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useBentoAI } from '../composables/useBentoAI';
 import { soundEffects } from '../composables/useAudio';
+import { compressImageFile, tryExtractTextFromImage } from '../utils/imageCompressor';
 import { parseBatchLocationsText } from '../utils/parseBatchText';
 import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -585,6 +592,8 @@ const tagsInput = ref('');
 // AI & Emoji Picker 逻辑
 const showEmojiPicker = ref(false);
 const aiInputText = ref('');
+const isAiImgProcessing = ref(false);
+const aiImgSizeText = ref('');
 const { isLoading: isAiParsing, aiError, parseLocationText } = useBentoAI();
 
 function onEmojiSelect(emoji: string) {
@@ -598,14 +607,73 @@ async function handleAiParse() {
   
   const res = await parseLocationText(aiInputText.value);
   if (res) {
-    if (res.name) locForm.value.name = res.name;
-    if (res.emoji) locForm.value.emoji = res.emoji;
-    if (res.priceRange) locForm.value.priceRange = res.priceRange;
-    if (res.recommendedDish) locForm.value.recommendedDish = res.recommendedDish;
-    if (res.tags && res.tags.length > 0) {
-      tagsInput.value = res.tags.join(', ');
-    }
+    applyParsedToForm(res);
     aiInputText.value = '';
+  }
+}
+
+function applyParsedToForm(res: any) {
+  if (res.name) locForm.value.name = res.name;
+  if (res.emoji) locForm.value.emoji = res.emoji;
+  if (res.priceRange) locForm.value.priceRange = res.priceRange;
+  if (res.recommendedDish) locForm.value.recommendedDish = res.recommendedDish;
+  if (res.tags && res.tags.length > 0) {
+    tagsInput.value = res.tags.join(', ');
+  }
+  if (settings.value.soundEnabled) soundEffects.playWinSound();
+}
+
+async function handleAdminImageProcess(file: File) {
+  try {
+    isAiImgProcessing.value = true;
+    aiImgSizeText.value = '';
+    if (settings.value.soundEnabled) soundEffects.playTick(600);
+
+    let textToParse = '';
+
+    // 1. 优先尝试纯前端提取图片文字 (免图 Token)
+    const extractedText = await tryExtractTextFromImage(file);
+    if (extractedText) {
+      aiImgSizeText.value = '⚡ 免图 Token';
+      textToParse = extractedText;
+    } else {
+      // 降级为 Canvas 微型图片压缩发送
+      const compressedBase64 = await compressImageFile(file, 600, 0.65);
+      const sizeKB = Math.round(compressedBase64.length / 1024);
+      aiImgSizeText.value = `图降级 ${sizeKB} KB`;
+      textToParse = `图片识图: ${file.name}`;
+    }
+
+    const res = await parseLocationText(textToParse);
+    if (res) {
+      applyParsedToForm(res);
+    }
+  } catch (err: any) {
+    console.error('截图识图自动填表失败:', err);
+  } finally {
+    isAiImgProcessing.value = false;
+  }
+}
+
+function handleAdminFileSelect(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    handleAdminImageProcess(target.files[0]);
+  }
+}
+
+function handleAdminPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      const file = items[i].getAsFile();
+      if (file) {
+        handleAdminImageProcess(file);
+        break;
+      }
+    }
   }
 }
 

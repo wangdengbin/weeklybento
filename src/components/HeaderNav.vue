@@ -65,15 +65,13 @@
           <Users :size="18" class="text-orange" />
         </button>
 
-        <!-- 管理员暗门 / 状态 -->
+        <!-- 管理控制台按钮 -->
         <button 
-          class="icon-btn admin-btn" 
-          :class="{ 'is-admin': isAdminLoggedIn }"
+          class="icon-btn admin-btn is-admin" 
           @click="openAdminModal"
-          title="管理员面板 (长按或点击)"
+          title="地点池与管理控制台"
         >
-          <ShieldCheck v-if="isAdminLoggedIn" :size="20" class="admin-active-icon" />
-          <Lock v-else :size="18" />
+          <SlidersHorizontal :size="18" class="admin-active-icon" />
         </button>
       </div>
     </div>
@@ -103,9 +101,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Volume2, VolumeX, ShieldCheck, Lock, Users, User, UserCheck, ChevronDown } from 'lucide-vue-next';
+import { Volume2, VolumeX, Users, User, UserCheck, ChevronDown, SlidersHorizontal } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
-import { useAdmin } from '../composables/useAdmin';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
@@ -113,7 +110,6 @@ import { soundEffects } from '../composables/useAudio';
 const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-modal']);
 
 const { settings, switchMode } = useBentoStore();
-const { isAdminLoggedIn } = useAdmin();
 const { team, myTeams } = useTeamWorkspace();
 const { isAnonymous, userEmail } = useAuth();
 

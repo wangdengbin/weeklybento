@@ -55,23 +55,24 @@
 
       <div v-else key="machine-main" class="machine-main-wrapper">
         <!-- 池子进度提示卡 -->
-        <div class="pool-status-card">
-          <div class="status-info">
+        <!-- 池子进度提示卡 -->
+        <div class="pool-status-card glass-card">
+          <div class="status-left">
             <span class="status-dot" :class="{ 'is-empty': isPoolEmpty }"></span>
             <span class="status-text">
               <template v-if="settings.activeMode === 'team'">[👥 搭子待抽池] </template>
               {{ currentCatMeta?.emoji }} {{ currentCatMeta?.name }}待抽池：<strong>{{ availablePool.length }}</strong> / {{ locations.length }} 个地点
             </span>
+          </div>
 
+          <div class="status-right-tools">
             <label class="weekly-toggle-badge" title="开启后本周 (周一至周日) 已抽中过的餐厅不会再次重抽">
               <input type="checkbox" v-model="settings.weeklyNoRepeat" class="weekly-checkbox" />
               <span>📅 按周不重复</span>
             </label>
-          </div>
-          
-          <div class="pool-actions">
+
             <button class="ai-debate-trigger-btn" type="button" @click="showFoodDebateModal = true" title="两家地点犹豫不决？让 AI 评估论选出结论">
-              <Sparkles :size="13" />
+              <Sparkles :size="14" />
               <span>🤼 AI 救救纠结症</span>
             </button>
 
@@ -737,19 +738,30 @@ function handleResetPool() {
 
 .pool-status-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.7);
+  gap: 8px 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
   border-radius: var(--radius-md);
   font-size: 0.85rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
-.status-info {
+.status-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-right-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
 
 .status-dot {
@@ -1657,20 +1669,22 @@ function handleResetPool() {
 .ai-debate-trigger-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 4px 10px;
   background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
-  border: 1px dashed #FF9933;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  border: 1px solid #FFB866;
+  border-radius: 16px;
+  font-size: 0.76rem;
+  font-weight: 800;
   color: #C2410C;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(255, 102, 0, 0.12);
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .ai-debate-trigger-btn:hover {
-  transform: scale(1.05);
-  background: linear-gradient(135deg, #FFEDD5 0%, #FDBA74 100%);
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 4px 10px rgba(255, 102, 0, 0.2);
 }
 </style>

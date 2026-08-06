@@ -67,7 +67,8 @@ const pwdInputRef = ref<HTMLInputElement | null>(null);
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    if (settings.value.activeMode === 'team' && canEditLocation.value) {
+    // 个人模式或有权限的团队模式直接自动解锁管理控制台，免去密码锁
+    if (settings.value.activeMode === 'personal' || (settings.value.activeMode === 'team' && canEditLocation.value)) {
       grantAdminSession();
     }
     passwordInput.value = '';
