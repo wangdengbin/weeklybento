@@ -102,7 +102,12 @@
     </div>
 
     <div v-else class="records-list">
-      <div v-for="rec in records" :key="rec.id" class="record-item glass-card" :class="{ 'is-planned': rec.status === 'planned' }">
+      <template v-for="group in groupedRecords" :key="group.key">
+        <div class="record-group-header">
+          <span class="group-month">📅 {{ group.label }}</span>
+          <span class="group-count">{{ group.items.length }} 条</span>
+        </div>
+        <div v-for="rec in group.items" :key="rec.id" class="record-item glass-card" :class="{ 'is-planned': rec.status === 'planned' }">
         <div class="item-date-col">
           <span class="date-str">{{ formatDate(rec.date) }}</span>
           <span class="date-meta-row">
@@ -161,6 +166,14 @@
           </button>
         </div>
       </div>
+      </template>
+
+      <!-- 加载更多 -->
+      <div v-if="records.length > visibleCount" class="load-more-row">
+        <button class="btn-secondary load-more-btn" @click="visibleCount += 30">
+          加载更多 ({{ records.length - visibleCount }} 条)
+        </button>
+      </div>
     </div>
 
     <!-- 编辑/补录弹窗 Modal -->
@@ -193,7 +206,12 @@
                 {{ loc.emoji }} {{ loc.name }} {{ loc.recommendedDish ? `(${loc.recommendedDish})` : '' }}
               </option>
             </select>
-            <input v-else type="text" v-model="form.locationName" placeholder="例如：萨莉亚 (或自定义名称)" required class="input-field" />
+            <input v-else type="text" v-model="form.locationName" list="history-location-suggest" placeholder="例如：萨莉亚 (或从下方列表快速选择)" required class="input-field" />
+            <datalist id="history-location-suggest">
+              <option v-for="loc in personalLocations" :key="loc.id" :value="loc.name">
+                {{ loc.emoji }} {{ loc.recommendedDish || '' }}
+              </option>
+            </datalist>
           </div>
 
           <!-- 个人模式：状态与花费金额 -->
@@ -294,9 +312,12 @@ import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useCloudSync } from '../composables/useCloudSync';
 import { useBentoAI, type WeeklyReportResult } from '../composables/useBentoAI';
 import { soundEffects } from '../composables/useAudio';
+import { useToast } from '../composables/useToast';
 import { MEAL_CATEGORIES, type DailyRecord, type MealCategory, type RecordStatus } from '../types';
 
-const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, confirmDailyRecord, addDirectRecord, settings, visibleMealCategories, getTodayDateString } = useBentoStore();
+const { success: toastSuccess, error: toastError, info: toastInfo, confirm: toastConfirm } = useToast();
+
+const { records: personalRecords, locations: personalLocations, updateRecord, deleteRecord, restoreRecord, addDirectRecord, settings, visibleMealCategories, getTodayDateString } = useBentoStore();
 const { team, history: teamHistory, locations: teamLocations, addOrUpdateTeamRecord, deleteTeamRecord } = useTeamWorkspace();
 const { pushToCloud } = useCloudSync();
 const { isLoading: isAiLoading, generateWeeklyReport } = useBentoAI();
@@ -306,7 +327,7 @@ const weeklyReport = ref<WeeklyReportResult | null>(null);
 
 async function handleGenerateWeeklyReport() {
   if (records.value.length === 0) {
-    alert('暂无打卡记录，快去记录或 Roll 一笔后再生成周报吧！');
+    toastInfo('暂无打卡记录，先去 Roll 一笔再生成周报吧！');
     return;
   }
   soundEffects.playTick(600);
@@ -331,7 +352,7 @@ function copyWeeklyReportText() {
   const text = `✨ 周周便当 · AI 饮食周报\n\n🏆 称号：${weeklyReport.value.title}\n\n🍔 饮食偏好：${weeklyReport.value.habitAnalysis}\n\n🥗 营养建议：${weeklyReport.value.healthInsight}\n\n💰 预算洞察：${weeklyReport.value.budgetInsight}`;
   navigator.clipboard.writeText(text);
   soundEffects.playTick(800);
-  alert('已成功将 AI 饮食周报文本复制到剪贴板！');
+  toastSuccess('AI 饮食周报文本已复制到剪贴板！');
 }
 
 const todayStr = computed(() => getTodayDateString());
@@ -341,13 +362,19 @@ const expiredPlannedRecords = computed(() => {
   return personalRecords.value.filter(r => r.date < todayStr.value && r.status === 'planned');
 });
 
-function handleClearExpiredPlanned() {
-  if (confirm(`确认作废这 ${expiredPlannedRecords.value.length} 条过往未打卡的预选记录吗？`)) {
-    const expiredIds = new Set(expiredPlannedRecords.value.map(r => r.id));
-    expiredIds.forEach(id => deleteRecord(id));
-    pushToCloud(true);
-    if (settings.value.soundEnabled) soundEffects.playTick(700);
-  }
+async function handleClearExpiredPlanned() {
+  const ok = await toastConfirm({
+    title: '一键作废预选',
+    message: `确认作废这 ${expiredPlannedRecords.value.length} 条过往未打卡的预选记录吗？`,
+    danger: true,
+    confirmText: '作废',
+  });
+  if (!ok) return;
+  const expiredIds = new Set(expiredPlannedRecords.value.map(r => r.id));
+  expiredIds.forEach(id => deleteRecord(id));
+  pushToCloud(true);
+  if (settings.value.soundEnabled) soundEffects.playTick(700);
+  toastSuccess(`已作废 ${expiredIds.size} 条过期预选`);
 }
 
 const isTeamMode = computed(() => settings.value.activeMode === 'team' && Boolean(team.value));
@@ -371,6 +398,24 @@ const canManageRecord = computed(() => true);
 
 const showModal = ref(false);
 const isEditing = ref(false);
+
+// 列表加载更多与按月分组
+const visibleCount = ref(30);
+const groupedRecords = computed(() => {
+  const shown = records.value.slice(0, visibleCount.value);
+  const groups: { key: string; label: string; items: DailyRecord[] }[] = [];
+  const currentMonth = getTodayDateString().slice(0, 7);
+  for (const r of shown) {
+    const monthKey = r.date.slice(0, 7);
+    let g = groups[groups.length - 1];
+    if (!g || g.key !== monthKey) {
+      g = { key: monthKey, label: `${Number(monthKey.slice(5))}月` + (monthKey === currentMonth ? ' (本月)' : ''), items: [] };
+      groups.push(g);
+    }
+    g.items.push(r);
+  }
+  return groups;
+});
 
 const form = ref({
   id: '',
@@ -437,7 +482,7 @@ const budgetStatusText = computed(() => {
 
 function exportCSV() {
   if (records.value.length === 0) {
-    alert('暂无饮食记账记录可导出');
+    toastInfo('暂无饮食记账记录可导出');
     return;
   }
 
@@ -483,12 +528,9 @@ function getCatName(catKey?: MealCategory) {
 }
 
 function handleQuickConfirmRecord(recordId: string) {
-  const costStr = prompt('请输入实付金额（元）：', '20');
-  if (costStr === null) return;
-  const cost = parseFloat(costStr);
-  confirmDailyRecord(recordId, isNaN(cost) ? undefined : cost);
-  pushToCloud(true);
-  if (settings.value.soundEnabled) soundEffects.playTick(900);
+  // 直接打开编辑弹窗，方便填写金额并确认打卡（替代原生 prompt）
+  const rec = records.value.find(r => r.id === recordId);
+  if (rec) openEditModal(rec);
 }
 
 function formatDate(dateStr: string) {
@@ -564,7 +606,7 @@ async function saveRecord() {
   try {
     if (isTeamMode.value) {
       if (!form.value.locationId) {
-        alert('请先选择团队地点');
+        toastError('请先选择团队地点');
         return;
       }
       await addOrUpdateTeamRecord(form.value.locationId, form.value.date, form.value.note);
@@ -599,24 +641,39 @@ async function saveRecord() {
       pushToCloud(true);
     }
     showModal.value = false;
+    if (settings.value.soundEnabled) soundEffects.playTick(900);
   } catch (e: any) {
-    alert(`保存记录失败: ${e.message || e}`);
+    toastError(`保存记录失败: ${e.message || e}`);
   }
 }
 
 async function confirmDelete(id: string) {
-  if (confirm('确认删除此条记录？')) {
-    if (settings.value.soundEnabled) soundEffects.playTick(400);
-    try {
-      if (isTeamMode.value) {
-        await deleteTeamRecord(id);
-      } else {
-        deleteRecord(id);
-        pushToCloud(true);
-      }
-    } catch (e: any) {
-      alert(e.message || '删除失败');
+  const ok = await toastConfirm({
+    title: '删除记录',
+    message: '确认删除此条记录？删除后可点击“撤销”恢复。',
+    danger: true,
+    confirmText: '删除',
+  });
+  if (!ok) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(400);
+  try {
+    if (isTeamMode.value) {
+      await deleteTeamRecord(id);
+      toastSuccess('已删除团队记录');
+    } else {
+      const target = personalRecords.value.find(r => r.id === id);
+      deleteRecord(id);
+      pushToCloud(true);
+      toastSuccess('已删除记录', target ? {
+        label: '撤销',
+        onClick: () => {
+          restoreRecord(target);
+          pushToCloud(true);
+        },
+      } : undefined);
     }
+  } catch (e: any) {
+    toastError(e.message || '删除失败');
   }
 }
 </script>
@@ -700,8 +757,43 @@ async function confirmDelete(id: string) {
 .records-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
+
+.record-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 2px 2px;
+}
+
+.record-group-header:first-child {
+  margin-top: 0;
+}
+
+.group-month {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.group-count {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.load-more-row {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.load-more-btn {
+  padding: 8px 20px;
+  font-size: 0.82rem;
+}
+
 
 .record-item {
   display: grid;

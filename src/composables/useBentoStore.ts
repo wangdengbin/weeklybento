@@ -391,6 +391,14 @@ export function useBentoStore() {
     records.value = records.value.filter(r => r.id !== id);
   }
 
+  // 撤销删除：将已删除的记录恢复回列表头部（用于 Toast 撤销按钮）
+  function restoreRecord(record: DailyRecord) {
+    if (!record) return;
+    if (!records.value.some(r => r.id === record.id)) {
+      records.value.unshift({ ...record, updatedAt: Date.now() });
+    }
+  }
+
   function addLocation(locationData: Omit<BentoLocation, 'id' | 'isDrawn' | 'createdAt'>) {
     const newLoc: BentoLocation = {
       ...locationData,
@@ -532,6 +540,7 @@ export function useBentoStore() {
     confirmDailyRecord,
     updateRecord,
     deleteRecord,
+    restoreRecord,
     addLocation,
     batchAddLocations,
     updateLocation,
