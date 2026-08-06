@@ -51,20 +51,25 @@
       </div>
 
       <div class="toolbar-wrapper">
-        <div class="toolbar-row ai-row">
-          <button class="btn-secondary ai-autofill-btn ai-glow-pill full-width-btn" :disabled="isAutoFilling" @click="handleAiAutoFillAllLocations" title="让 AI 自动扫描当前地址池，智能补全所有缺失的推荐菜、Emoji与人均价格">
-            <Sparkles :size="15" class="ai-sparkle-icon" />
-            <span>{{ isAutoFilling ? 'AI 智能分析补全中...' : '✨ AI 智能补全现有地址池 (推荐菜/人均/Emoji)' }}</span>
-          </button>
-        </div>
-        <div class="toolbar-row action-row">
+        <div class="toolbar-row action-row-grid">
           <button class="btn-primary add-loc-btn" @click="openAddLocModal">
             <Plus :size="16" />
             <span>添加新午餐地点</span>
           </button>
-          <button class="btn-secondary flex-1" @click="showBatchModal = true" title="支持多行文本或美团/大众点评地址截图批量导入">
+          <button class="btn-secondary scan-nearby-action-btn" @click="emit('open-scan-modal')" title="基于定位自动扫描附近 500m~2000m 美食，由 AI 智能整理维护入库">
+            <Compass :size="15" class="text-orange spin-hover" />
+            <span>📍 扫描周边美食 (AI 维护)</span>
+          </button>
+          <button class="btn-secondary batch-import-action-btn" @click="showBatchModal = true" title="支持多行文本或美团/大众点评地址截图批量导入">
             <FileText :size="14" />
             <span>批量文本/截图导入</span>
+          </button>
+        </div>
+
+        <div class="toolbar-row ai-row">
+          <button class="btn-secondary ai-autofill-btn ai-glow-pill full-width-btn" :disabled="isAutoFilling" @click="handleAiAutoFillAllLocations" title="让 AI 自动扫描当前地址池，智能补全所有缺失的推荐菜、Emoji与人均价格">
+            <Sparkles :size="15" class="ai-sparkle-icon" />
+            <span>{{ isAutoFilling ? 'AI 智能分析补全中...' : '✨ AI 智能补全现有地址池 (推荐菜/人均/Emoji)' }}</span>
           </button>
         </div>
         <div v-if="selectedLocIds.length > 0 || settings.activeMode === 'personal'" class="toolbar-row sub-action-row">
@@ -434,7 +439,7 @@
 import { ref, computed } from 'vue';
 import { 
   Crown, X, Utensils, Cloud, Plus, RotateCcw, Edit3, Trash2, Lock, Wallet, Eye, EyeOff,
-  Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText, Sparkles 
+  Cloud as CloudCloud, UploadCloud, DownloadCloud, FileSpreadsheet, Download, Upload, FileText, Sparkles, Compass 
 } from 'lucide-vue-next';
 import EmojiPicker from './EmojiPicker.vue';
 import { useBentoStore } from '../composables/useBentoStore';
@@ -449,7 +454,7 @@ import { parseBatchLocationsText } from '../utils/parseBatchText';
 import { MEAL_CATEGORIES, type BentoLocation, type MealCategory } from '../types';
 import { isSupabaseConfigured } from '../lib/supabase';
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'open-scan-modal']);
 
 
 const { locations: personalLocations, addLocation, batchAddLocations, updateLocation, deleteLocation, batchDeleteLocations: batchDeletePersonalLocations, resetPool, restoreDefaultLocations, exportDataJSON, importDataJSON, settings, updateEnabledMealCategories } = useBentoStore();
@@ -1162,6 +1167,35 @@ function handleImportFile(event: Event) {
   gap: 8px;
 }
 
+.action-row-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.action-row-grid button {
+  flex: 1 1 140px;
+  white-space: nowrap;
+  justify-content: center;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+}
+
+.scan-nearby-action-btn {
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.9), rgba(254, 215, 170, 0.4));
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  color: #c2410c;
+  font-weight: 700;
+}
+
+.scan-nearby-action-btn:hover {
+  background: linear-gradient(135deg, #fff7ed, #fed7aa);
+  border-color: #f97316;
+  color: #ea580c;
+}
+
 .full-width-btn {
   width: 100%;
   justify-content: center;
@@ -1169,9 +1203,9 @@ function handleImportFile(event: Event) {
 }
 
 .add-loc-btn {
-  flex: 1;
-  padding: 10px 14px;
-  font-size: 0.9rem;
+  flex: 1 1 140px;
+  padding: 9px 14px;
+  font-size: 0.88rem;
 }
 
 .locations-list {

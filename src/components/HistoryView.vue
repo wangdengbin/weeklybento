@@ -1327,13 +1327,32 @@ async function confirmDelete(id: string) {
   color: #1E293B;
 }
 
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
 .weekly-report-modal {
-  max-width: 420px;
+  max-width: 440px;
   width: 92%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
   background: #FFFDF9;
-  border-radius: 18px;
-  padding: 16px 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  border-radius: 20px;
+  padding: 18px 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25), 0 0 20px rgba(251, 146, 60, 0.15);
+  border: 1px solid rgba(251, 146, 60, 0.2);
 }
 
 .report-header {

@@ -1,5 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -25,7 +23,7 @@ function checkRateLimit(clientIP: string, limit = 8, windowMs = 60000): boolean 
   return true;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -64,7 +62,8 @@ serve(async (req) => {
       location1,
       location2,
       dishName,
-      imageText
+      imageText,
+      scannedPois
     } = body || {};
 
     // 1. 场景 1: AI 智能解析非结构化文本导入地点
@@ -328,6 +327,89 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, recipe: recipeJson }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 6. 场景 6: AI 智能整理周边扫描到的 POI 店铺列表
+    if (action === 'organize_scanned_locations') {
+      const poisList = Array.isArray(scannedPois) ? scannedPois.slice(0, 15) : [];
+
+      const systemPrompt = `你是一个智能美食数据分析师。请将扫描到的周边美食商家清单，批量整理并增强为 WeeklyBento 标准的地点对象 JSON 数组。
+必须仅返回 JSON，格式如下：
+{
+  "items": [
+    {
+      "name": "店铺名称（必须优先保留具体地名/分店后缀，如：小杨生煎(科技园店)）",
+      "address": "具体地名或详细地址（如：科技大道88号1层 或 商业街108号）",
+      "distance": "距当前参考位置距离（如：150m）",
+      "emoji": "一个最能代表该美食风格的 Emoji（如 🥟 🍜 🍔 🍣 ☕ 🥩 🍲）",
+      "tags": ["特征标签1", "特征标签2"],
+      "priceRange": "预估人均价格，如 ￥20-35",
+      "recommendedDish": "推测或著名的招牌菜",
+      "mealCategories": ["lunch", "dinner"]  // 只能从 ["breakfast", "lunch", "tea", "dinner", "night"] 中挑选适合该餐厅的餐池分类
+    }
+  ]
+}
+注意：
+1. 店铺名称 name 必须优先保留其地理位置/分店标识（如：科技园店、西湖店、创业路店）。
+2. 必须保留地名 address 与距离 distance 信息。
+3. 为每个店铺打上吸引人的特征标签。
+4. 绝对不要包含 markdown 格式标记或额外多余文字。`;
+
+      const userMessage = `扫描到的周边商家列表：\n${JSON.stringify(poisList)}`;
+
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: 0.3,
+          response_format: { type: 'json_object' }
+        }),
+      });
+
+      const data = await response.json();
+      const resultText = data.choices?.[0]?.message?.content || '{}';
+      let organizedJson: { items: any[] } = { items: [] };
+      try {
+        organizedJson = JSON.parse(resultText);
+      } catch (e) {
+        organizedJson = {
+          items: poisList.map(p => ({
+            name: p.name,
+            address: p.address || '',
+            distance: p.distance ? `${p.distance}m` : '',
+            emoji: '🍱',
+            tags: [p.type || '周边美食'],
+            priceRange: '￥25-40',
+            recommendedDish: '招牌特色菜',
+            mealCategories: ['lunch', 'dinner']
+          }))
+        };
+      }
+
+      // 强效兜底保全原生的地名与距离数据
+      if (Array.isArray(organizedJson.items)) {
+        organizedJson.items = organizedJson.items.map((item: any, idx: number) => {
+          const rawPoi = poisList[idx];
+          return {
+            ...item,
+            address: item.address || rawPoi?.address || '',
+            distance: item.distance || (rawPoi?.distance ? `${rawPoi.distance}m` : ''),
+          };
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, items: organizedJson.items || [] }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

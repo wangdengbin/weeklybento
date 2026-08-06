@@ -5,6 +5,7 @@
       @open-admin-modal="showAdminModal = true"
       @open-team-modal="showTeamModal = true"
       @open-auth-modal="showAuthModal = true"
+      @open-scan-modal="showScanModal = true"
     />
 
     <!-- 主 View 视图 -->
@@ -31,6 +32,7 @@
     <AdminModal 
       :visible="showAdminModal" 
       @close="showAdminModal = false" 
+      @open-scan-modal="showAdminModal = false; showScanModal = true"
     />
 
     <TeamWorkspaceModal
@@ -42,6 +44,12 @@
     <AuthModal
       :visible="showAuthModal"
       @close="showAuthModal = false"
+    />
+
+    <!-- 📍 周边美食雷达 & AI 智能整理维护弹窗 -->
+    <NearbyScanModal
+      v-if="showScanModal"
+      @close="showScanModal = false"
     />
 
     <!-- 底部 H5 移动端 Sweet TabBar -->
@@ -91,6 +99,7 @@ import ResultModal from './components/ResultModal.vue';
 import AdminModal from './components/AdminModal.vue';
 import TeamWorkspaceModal from './components/TeamWorkspaceModal.vue';
 import AuthModal from './components/AuthModal.vue';
+import NearbyScanModal from './components/NearbyScanModal.vue';
 import { soundEffects } from './composables/useAudio';
 import { useBentoStore } from './composables/useBentoStore';
 import { useTeamWorkspace } from './composables/useTeamWorkspace';
@@ -102,6 +111,7 @@ const showResultModal = ref(false);
 const showAdminModal = ref(false);
 const showTeamModal = ref(false);
 const showAuthModal = ref(false);
+const showScanModal = ref(false);
 
 const { settings } = useBentoStore();
 const { team, initialize } = useTeamWorkspace();

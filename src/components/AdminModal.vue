@@ -39,7 +39,7 @@
 
       <!-- 已登录状态，包含核心管理控制台组件 -->
       <div v-else class="panel-box">
-        <AdminPanel @close="closeModal" />
+        <AdminPanel @close="closeModal" @open-scan-modal="emit('open-scan-modal')" />
       </div>
     </div>
   </div>
@@ -55,7 +55,7 @@ import { soundEffects } from '../composables/useAudio';
 import AdminPanel from './AdminPanel.vue';
 
 const props = defineProps<{ visible: boolean }>();
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'open-scan-modal']);
 
 const { isAdminLoggedIn, verifyPassword, grantAdminSession } = useAdmin();
 const { settings } = useBentoStore();

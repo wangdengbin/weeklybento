@@ -65,6 +65,15 @@
           <Users :size="18" class="text-orange" />
         </button>
 
+        <!-- 📍 扫描周边美食 & AI 整理入口 -->
+        <button 
+          class="icon-btn scan-nearby-btn" 
+          @click="emit('open-scan-modal')"
+          title="扫描周边 500m-2000m 美食，AI 自动整理维护"
+        >
+          <Compass :size="18" class="text-orange" />
+        </button>
+
         <!-- 管理控制台按钮 -->
         <button 
           class="icon-btn admin-btn is-admin" 
@@ -101,13 +110,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Volume2, VolumeX, Users, User, UserCheck, ChevronDown, SlidersHorizontal } from 'lucide-vue-next';
+import { Volume2, VolumeX, Users, User, UserCheck, ChevronDown, SlidersHorizontal, Compass } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
 
-const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-modal']);
+const emit = defineEmits(['open-admin-modal', 'open-team-modal', 'open-auth-modal', 'open-scan-modal']);
 
 const { settings, switchMode } = useBentoStore();
 const { team, myTeams } = useTeamWorkspace();
@@ -264,7 +273,7 @@ function openAdminModal() {
 .actions-area {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   white-space: nowrap;
 }

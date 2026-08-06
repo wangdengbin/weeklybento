@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { supabase } from '../lib/supabase';
+import type { MealCategory } from '../types';
 
 export interface ParsedLocationResult {
   name: string;
@@ -7,6 +8,9 @@ export interface ParsedLocationResult {
   tags: string[];
   priceRange: string;
   recommendedDish?: string;
+  mealCategories?: MealCategory[];
+  address?: string;
+  distance?: string | number;
 }
 
 export interface WeeklyReportResult {
@@ -264,6 +268,43 @@ export function useBentoAI() {
     }
   }
 
+  /**
+   * 场景 6: AI 智能整理周边扫描到的美食 POI 列表
+   */
+  async function organizeScannedLocations(scannedPois: any[]): Promise<ParsedLocationResult[] | null> {
+    isLoading.value = true;
+    aiError.value = null;
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase 客户端未初始化');
+      }
+
+      const { data, error } = await supabase.functions.invoke('bento-ai', {
+        body: {
+          action: 'organize_scanned_locations',
+          scannedPois,
+        },
+      });
+
+      if (error) {
+        throw new Error(parseFunctionError(error, 'AI 整理周边地点失败'));
+      }
+
+      if (data?.error) {
+        throw new Error(data.message || data.error);
+      }
+
+      return (data.items || []) as ParsedLocationResult[];
+    } catch (err: any) {
+      console.error('[BentoAI Organize Locations Error]:', err);
+      aiError.value = err.message || 'AI 整理周边地点发生异常';
+      return null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   return {
     isLoading,
     aiError,
@@ -272,5 +313,6 @@ export function useBentoAI() {
     generateWeeklyReport,
     generateFoodDebate,
     generateRecipe,
+    organizeScannedLocations,
   };
 }
