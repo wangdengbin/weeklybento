@@ -402,8 +402,12 @@ Deno.serve(async (req) => {
           const rawPoi = poisList[idx];
           return {
             ...item,
-            address: item.address || rawPoi?.address || '',
-            distance: item.distance || (rawPoi?.distance ? `${rawPoi.distance}m` : ''),
+            // AMap is the source of truth for identity/location. AI may only
+            // enrich tags, price and dish metadata.
+            id: rawPoi?.id || item.id,
+            name: rawPoi?.name || item.name,
+            address: rawPoi?.address || item.address || '',
+            distance: rawPoi?.distance ? `${rawPoi.distance}m` : (item.distance || ''),
           };
         });
       }

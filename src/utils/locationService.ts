@@ -47,13 +47,32 @@ export function calculateDistance(
   return Math.round(R * c);
 }
 
+/** 自动定位失败的具体原因，供 UI 分场景引导 */
+export type GeoFailReason = 'no-service' | 'denied' | 'unavailable' | 'timeout' | 'unknown';
+
+/** 带失败原因分类的地理定位错误，便于上层 UI 给出针对性引导 */
+export class GeolocationError extends Error {
+  reason: GeoFailReason;
+  constructor(reason: GeoFailReason, message: string) {
+    super(message);
+    this.name = 'GeolocationError';
+    this.reason = reason;
+  }
+}
+
+/** 当前环境是否具备 HTML5 地理定位能力（无定位服务时提前降级到手动输入流程） */
+export function isGeolocationSupported(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.geolocation !== 'undefined';
+}
+
 /**
  * 2. 获取浏览器当前地理位置 (HTML5 Geolocation API)
+ * 失败时抛出携带分类原因的 GeolocationError
  */
 export function getUserCurrentLocation(): Promise<{ lat: number; lng: number }> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('您的浏览器不支持 HTML5 地理定位功能'));
+      reject(new GeolocationError('no-service', '当前浏览器/环境不支持 HTML5 地理定位'));
       return;
     }
 
@@ -65,19 +84,25 @@ export function getUserCurrentLocation(): Promise<{ lat: number; lng: number }> 
         });
       },
       (error) => {
+        let reason: GeoFailReason = 'unknown';
         let msg = '获取位置失败';
+        // 使用数字字面量（1=PERMISSION_DENIED / 2=POSITION_UNAVAILABLE / 3=TIMEOUT）更稳健，
+        // 部分环境/测试中错误对象上可能访问不到同名静态常量
         switch (error.code) {
-          case error.PERMISSION_DENIED:
-            msg = '已拒绝位置权限，无法自动获取当前位置';
+          case 1:
+            reason = 'denied';
+            msg = '定位权限已被禁用。请在浏览器地址栏左侧（或网站设置）中允许定位权限，然后重新扫描，或直接点击手动修改位置。';
             break;
-          case error.POSITION_UNAVAILABLE:
+          case 2:
+            reason = 'unavailable';
             msg = '位置信息不可用，请检查设备定位服务是否开启';
             break;
-          case error.TIMEOUT:
+          case 3:
+            reason = 'timeout';
             msg = '获取地理位置超时，请重试';
             break;
         }
-        reject(new Error(msg));
+        reject(new GeolocationError(reason, msg));
       },
       {
         enableHighAccuracy: true,
@@ -210,14 +235,23 @@ export async function fetchNearbyPois(
   lat: number,
   lng: number,
   radius: number = 1000,
-  amapKey?: string
+  amapKey?: string,
+  types: string = '050000',
+  keywords: string = '美食',
+  page: number = 1
 ): Promise<ScannedPoiItem[]> {
   const key = amapKey || (import.meta.env.VITE_AMAP_KEY as string);
 
-  // 如果提供了高德 ApiKey，尝试通过高德 REST API 查询周边美食
+  if (!key || !key.trim()) {
+    // 没有 Key 时直接走 Mock 过滤返回
+    return generateMockNearbyPois(lat, lng, radius, types);
+  }
+
+  // 如果提供了高德 ApiKey，根据所选的 types 与 keywords 拼接请求
   if (key && key.trim()) {
     try {
-      const url = `https://restapi.amap.com/v3/place/around?key=${key.trim()}&location=${lng},${lat}&keywords=美食&types=050000&radius=${radius}&offset=15&page=1&extensions=all`;
+      const keywordParam = keywords ? `&keywords=${encodeURIComponent(keywords)}` : '';
+      const url = `https://restapi.amap.com/v3/place/around?key=${key.trim()}&location=${lng},${lat}${keywordParam}&types=${types}&radius=${radius}&offset=20&page=${page}&extensions=all`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.status === '1' && Array.isArray(data.pois) && data.pois.length > 0) {
@@ -225,7 +259,7 @@ export async function fetchNearbyPois(
           id: p.id || Math.random().toString(36).substr(2, 9),
           name: p.name,
           address: p.address || p.pname + p.cityname + p.adname,
-          distance: parseInt(p.distance, 10) || Math.floor(Math.random() * 500) + 100,
+          distance: Number.isFinite(Number.parseInt(p.distance, 10)) ? Number.parseInt(p.distance, 10) : 0,
           tel: p.tel,
           type: p.type,
         }));
@@ -235,8 +269,7 @@ export async function fetchNearbyPois(
     }
   }
 
-  // 兜底：根据当前坐标自动生成结构精美、接地气的本地真实感周边美食列表
-  return generateMockNearbyPois(lat, lng, radius);
+  return generateMockNearbyPois(lat, lng, radius, types);
 }
 
 /**
@@ -245,10 +278,17 @@ export async function fetchNearbyPois(
 export async function searchPoisByCustomLocation(
   locationName: string,
   radius: number = 1000,
-  amapKey?: string
-): Promise<{ pois: ScannedPoiItem[]; coords?: { lat: number; lng: number } }> {
+  amapKey?: string,
+  types: string = '050000',
+  keywords: string = '美食',
+  page: number = 1
+): Promise<{ pois: ScannedPoiItem[]; coords?: { lat: number; lng: number }; formattedAddress?: string }> {
   const key = amapKey || (import.meta.env.VITE_AMAP_KEY as string);
   const cleanLoc = locationName.trim();
+
+  if (!key || !key.trim()) {
+    return { pois: generateCustomMockPois(cleanLoc, radius, types) };
+  }
 
   if (key && key.trim()) {
     try {
@@ -262,13 +302,15 @@ export async function searchPoisByCustomLocation(
         const [lngStr, latStr] = first.location.split(',');
         const lng = parseFloat(lngStr);
         const lat = parseFloat(latStr);
+        const formattedAddress = first.formatted_address || cleanLoc;
 
-        const pois = await fetchNearbyPois(lat, lng, radius, key);
-        return { pois, coords: { lat, lng } };
+        const pois = await fetchNearbyPois(lat, lng, radius, key, types, keywords, page);
+        return { pois, coords: { lat, lng }, formattedAddress };
       }
 
       // 如果地理编码未直接命中，尝试文本直接检索 Place Text
-      const textUrl = `https://restapi.amap.com/v3/place/text?key=${key.trim()}&keywords=${encodeURIComponent(cleanLoc + ' 美食')}&types=050000&offset=15&page=1`;
+      const searchQuery = keywords ? `${cleanLoc} ${keywords}` : cleanLoc;
+      const textUrl = `https://restapi.amap.com/v3/place/text?key=${key.trim()}&keywords=${encodeURIComponent(searchQuery)}&types=${types}&offset=20&page=1`;
       const textRes = await fetch(textUrl);
       const textData = await textRes.json();
 
@@ -277,7 +319,7 @@ export async function searchPoisByCustomLocation(
           id: p.id || Math.random().toString(36).substr(2, 9),
           name: p.name,
           address: p.address || p.pname + p.cityname + p.adname,
-          distance: parseInt(p.distance, 10) || Math.floor(Math.random() * 500) + 100,
+          distance: Number.isFinite(Number.parseInt(p.distance, 10)) ? Number.parseInt(p.distance, 10) : 0,
           tel: p.tel,
           type: p.type,
         }));
@@ -289,14 +331,19 @@ export async function searchPoisByCustomLocation(
   }
 
   // 降级：基于自定义位置名称生成定制化真实感 POI 数据
-  const pois = generateCustomMockPois(cleanLoc, radius);
-  return { pois };
+  return { pois: generateCustomMockPois(cleanLoc, radius) };
 }
 
 /**
  * 智能生成真实感模拟周边 POI (当没有 API Key 或跨域受限时)
  */
-function generateMockNearbyPois(lat: number, lng: number, radius: number): ScannedPoiItem[] {
+function generateMockNearbyPois(lat: number, lng: number, radius: number, types: string = '050000'): ScannedPoiItem[] {
+  // Compatibility shim only. Never fabricate stores when AMap is unavailable.
+  void lat;
+  void lng;
+  void radius;
+  void types;
+  return [];
   const pool = [
     { name: '小杨生煎 (科技园店)', type: '小吃快餐', address: '科技大道88号1层', baseDist: 150 },
     { name: '老成都川菜馆', type: '川菜/家常菜', address: '创业一路12号', baseDist: 280 },
@@ -330,7 +377,12 @@ function generateMockNearbyPois(lat: number, lng: number, radius: number): Scann
 /**
  * 针对用户手动输入的自定义位置生成的周边真实感美食列表
  */
-function generateCustomMockPois(locationName: string, radius: number): ScannedPoiItem[] {
+function generateCustomMockPois(locationName: string, radius: number, types: string = '050000'): ScannedPoiItem[] {
+  // Compatibility shim only. Never fabricate stores when AMap is unavailable.
+  void locationName;
+  void radius;
+  void types;
+  return [];
   const locTag = locationName || '当前指定位置';
   const customPool = [
     { name: `老字号地道小吃 (${locTag}店)`, type: '地方特色小吃', address: `${locTag}美食街 16 号`, baseDist: 120 },
@@ -354,3 +406,43 @@ function generateCustomMockPois(locationName: string, radius: number): ScannedPo
     }));
 }
 
+export interface LocationTipItem {
+  id: string;
+  name: string;
+  district: string;
+  address: string;
+  location?: string;
+}
+
+/**
+ * 9. 高德输入提示 (InputTips) API：根据用户模糊键入获取实时的精确地点匹配列表
+ */
+export async function fetchInputTips(
+  keywords: string,
+  city?: string,
+  amapKey?: string
+): Promise<LocationTipItem[]> {
+  const key = amapKey || (import.meta.env.VITE_AMAP_KEY as string);
+  if (!key || !key.trim() || !keywords || !keywords.trim()) return [];
+
+  try {
+    const cityParam = city ? `&city=${encodeURIComponent(city)}` : '';
+    const url = `https://restapi.amap.com/v3/assistant/inputtips?key=${key.trim()}&keywords=${encodeURIComponent(keywords.trim())}${cityParam}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.status === '1' && Array.isArray(data.tips)) {
+      return data.tips
+        .filter((t: any) => t.name && typeof t.name === 'string')
+        .map((t: any) => ({
+          id: t.id || Math.random().toString(36).substring(2, 9),
+          name: t.name,
+          district: typeof t.district === 'string' ? t.district : '',
+          address: typeof t.address === 'string' ? t.address : '',
+          location: typeof t.location === 'string' ? t.location : '',
+        }));
+    }
+  } catch (err) {
+    console.warn('[AMap InputTips Error]:', err);
+  }
+  return [];
+}
