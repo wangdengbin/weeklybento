@@ -150,6 +150,51 @@ async function signInWithPassword(email: string, password: string): Promise<{ su
 }
 
 /**
+ * 修改当前账号的登录密码
+ */
+async function updateUserPassword(newPassword: string): Promise<{ success: boolean; message: string }> {
+  if (!supabase) return { success: false, message: '尚未配置 Supabase' };
+  if (!newPassword || newPassword.trim().length < 6) {
+    return { success: false, message: '新密码长度不能少于 6 位' };
+  }
+  isAuthLoading.value = true;
+  authError.value = '';
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword.trim() });
+    if (error) throw error;
+    return { success: true, message: '密码修改成功！下次登录请使用新密码。' };
+  } catch (e: any) {
+    const msg = e.message || '修改密码失败';
+    authError.value = msg;
+    return { success: false, message: msg };
+  } finally {
+    isAuthLoading.value = false;
+  }
+}
+
+/**
+ * 发送密码重置邮件到指定邮箱
+ */
+async function resetPassword(email: string): Promise<{ success: boolean; message: string }> {
+  if (!supabase) return { success: false, message: '尚未配置 Supabase' };
+  const cleanEmail = email.trim();
+  if (!cleanEmail) return { success: false, message: '请输入邮箱地址' };
+  isAuthLoading.value = true;
+  authError.value = '';
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+    if (error) throw error;
+    return { success: true, message: '重置邮件已发送！请前往邮箱点击链接设置新密码。' };
+  } catch (e: any) {
+    const msg = e.message || '发送重置邮件失败';
+    authError.value = msg;
+    return { success: false, message: msg };
+  } finally {
+    isAuthLoading.value = false;
+  }
+}
+
+/**
  * 退出当前登录并重置为新的游客身份
  */
 async function signOut(): Promise<void> {
@@ -186,6 +231,8 @@ export function useAuth() {
     ensureAnonymousSession,
     signUpOrUpgrade,
     signInWithPassword,
+    updateUserPassword,
+    resetPassword,
     signOut,
   };
 }

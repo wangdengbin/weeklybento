@@ -41,6 +41,22 @@
           </div>
         </div>
 
+        <!-- 修改密码 -->
+        <div class="pwd-box">
+          <div class="pwd-box-title">🔑 修改登录密码</div>
+          <input
+            type="password"
+            v-model="newPassword"
+            placeholder="请输入新密码 (至少 6 位)"
+            class="input-field"
+            minlength="6"
+          />
+          <button class="btn-secondary pwd-submit-btn" :disabled="isAuthLoading || !newPassword" @click="handleChangePassword">
+            <KeyRound :size="15" />
+            {{ isAuthLoading ? '提交中...' : '确认修改密码' }}
+          </button>
+        </div>
+
         <button class="btn-danger logout-btn" :disabled="isAuthLoading" @click="handleSignOut">
           <X :size="16" />
           <span>关闭并登出账号 (重置为游客)</span>
@@ -101,6 +117,22 @@
           <p class="auth-tip">
             {{ activeTab === 'signin' ? '💡 登录电脑端已注册的账号，即可将手机端同步为相同身份！' : '💡 注册后，您当前所有的团队、地点和记录都将完整同步保留。' }}
           </p>
+
+          <!-- 忘记密码：发送重置邮件 -->
+          <div v-if="activeTab === 'signin' && showResetPwd" class="reset-pwd-box">
+            <input
+              type="email"
+              v-model="resetEmail"
+              placeholder="输入注册邮箱以发送重置邮件"
+              class="input-field"
+            />
+            <button type="button" class="btn-secondary reset-send-btn" :disabled="isAuthLoading || !resetEmail" @click="handleSendResetEmail">
+              {{ isAuthLoading ? '发送中...' : '发送密码重置邮件' }}
+            </button>
+          </div>
+          <button v-if="activeTab === 'signin' && !showResetPwd" type="button" class="forgot-link" @click="showResetPwd = true">
+            忘记密码？
+          </button>
         </form>
       </template>
 
@@ -110,9 +142,12 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { User, X, Sparkles, UserCheck, LogIn, UserPlus } from 'lucide-vue-next';
+import { User, X, Sparkles, UserCheck, LogIn, UserPlus, KeyRound } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
+import { useToast } from '../composables/useToast';
+
+const { success: toastSuccess, error: toastError, confirm: toastConfirm } = useToast();
 
 const props = defineProps<{
   visible: boolean;
@@ -120,13 +155,16 @@ const props = defineProps<{
 
 const emit = defineEmits(['close']);
 
-const { isAnonymous, userEmail, isAuthLoading, signUpOrUpgrade, signInWithPassword, signOut } = useAuth();
+const { isAnonymous, userEmail, isAuthLoading, signUpOrUpgrade, signInWithPassword, updateUserPassword, resetPassword, signOut } = useAuth();
 
 const activeTab = ref<'signin' | 'signup'>('signin');
 const email = ref('');
 const password = ref('');
 const errorMsg = ref('');
 const successMsg = ref('');
+const showResetPwd = ref(false);
+const resetEmail = ref('');
+const newPassword = ref('');
 
 watch(() => props.visible, (val) => {
   if (val) {
@@ -134,8 +172,31 @@ watch(() => props.visible, (val) => {
     successMsg.value = '';
     email.value = '';
     password.value = '';
+    newPassword.value = '';
+    showResetPwd.value = false;
+    resetEmail.value = '';
   }
 });
+
+async function handleChangePassword() {
+  const res = await updateUserPassword(newPassword.value);
+  if (res.success) {
+    toastSuccess(res.message);
+    newPassword.value = '';
+  } else {
+    toastError(res.message);
+  }
+}
+
+async function handleSendResetEmail() {
+  const res = await resetPassword(resetEmail.value);
+  if (res.success) {
+    toastSuccess(res.message);
+    showResetPwd.value = false;
+  } else {
+    toastError(res.message);
+  }
+}
 
 async function handleSubmit() {
   errorMsg.value = '';
@@ -174,11 +235,16 @@ async function handleSubmit() {
 }
 
 async function handleSignOut() {
-  if (confirm('确定要退出当前账号吗？退出后系统将自动恢复为游客身份。')) {
-    soundEffects.playTick(400);
-    await signOut();
-    emit('close');
-  }
+  const ok = await toastConfirm({
+    title: '退出账号',
+    message: '确定要退出当前账号吗？退出后系统将自动恢复为游客身份。',
+    danger: true,
+    confirmText: '退出登录',
+  });
+  if (!ok) return;
+  soundEffects.playTick(400);
+  await signOut();
+  emit('close');
 }
 
 function handleClose() {
@@ -406,5 +472,51 @@ function handleClose() {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* 修改密码区域 */
+.pwd-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.pwd-box-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0F172A;
+}
+
+.pwd-submit-btn {
+  padding: 8px 0;
+  font-size: 0.82rem;
+}
+
+/* 忘记密码 */
+.reset-pwd-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.reset-send-btn {
+  padding: 8px 0;
+  font-size: 0.82rem;
+}
+
+.forgot-link {
+  background: none;
+  border: none;
+  color: #2563EB;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
 }
 </style>
