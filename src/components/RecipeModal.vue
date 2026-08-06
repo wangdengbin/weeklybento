@@ -94,6 +94,9 @@ import { ChefHat, Sparkles, Upload } from 'lucide-vue-next';
 import { useBentoAI, type RecipeResult } from '../composables/useBentoAI';
 import { compressImageFile, tryExtractTextFromImage } from '../utils/imageCompressor';
 import { soundEffects } from '../composables/useAudio';
+import { useToast } from '../composables/useToast';
+
+const { success: toastSuccess } = useToast();
 
 const props = defineProps<{
   visible: boolean;
@@ -193,7 +196,7 @@ function copyIngredients() {
   const list = recipe.value.ingredients.map(i => `${i.name}: ${i.amount}`).join('\n');
   navigator.clipboard.writeText(`🛒 ${recipe.value.dishName} 食材采购清单：\n${list}`);
   soundEffects.playTick(800);
-  alert('已成功复制食材清单到剪贴板！');
+  toastSuccess('已成功复制食材清单到剪贴板！');
 }
 </script>
 

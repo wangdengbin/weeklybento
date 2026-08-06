@@ -448,6 +448,7 @@ import { useAuth } from '../composables/useAuth';
 import { useCloudSync } from '../composables/useCloudSync';
 import { useTeamWorkspace } from '../composables/useTeamWorkspace';
 import { useBentoAI } from '../composables/useBentoAI';
+import { useToast } from '../composables/useToast';
 import { soundEffects } from '../composables/useAudio';
 import { compressImageFile, tryExtractTextFromImage } from '../utils/imageCompressor';
 import { parseBatchLocationsText } from '../utils/parseBatchText';
@@ -461,6 +462,7 @@ const { locations: personalLocations, addLocation, batchAddLocations, updateLoca
 const { logout, changePassword } = useAdmin();
 const { isSyncing, syncLog, lastSyncedAt, pushToCloud, pullFromCloud } = useCloudSync();
 const { isAnonymous, userEmail } = useAuth();
+const { success: toastSuccess, error: toastError, info: toastInfo, confirm: toastConfirm } = useToast();
 const {
   team,
   locations: teamLocations,
@@ -487,7 +489,7 @@ function handleToggleCategory(catKey: MealCategory) {
   const idx = current.indexOf(catKey);
   if (idx >= 0) {
     if (current.length <= 1) {
-      alert('至少需要保留一个开启展示的餐池分类！');
+      toastError('至少需要保留一个开启展示的餐池分类！');
       return;
     }
     current.splice(idx, 1);
@@ -513,22 +515,28 @@ function toggleSelectAll() {
 
 async function handleBatchDelete() {
   if (selectedLocIds.value.length === 0) return;
-  if (!confirm(`确认要删除选中的 ${selectedLocIds.value.length} 个午餐地点吗？`)) return;
+  const ok = await toastConfirm({
+    title: '批量删除地点',
+    message: `确认要删除选中的 ${selectedLocIds.value.length} 个午餐地点吗？`,
+    danger: true,
+    confirmText: '删除',
+  });
+  if (!ok) return;
 
   if (settings.value.soundEnabled) soundEffects.playTick(300);
 
   if (settings.value.activeMode === 'team') {
     try {
       await batchDeleteTeamLocations(selectedLocIds.value);
-      alert(`已成功删除选中的 ${selectedLocIds.value.length} 个团队地点！`);
+      toastSuccess(`已成功删除选中的 ${selectedLocIds.value.length} 个团队地点！`);
     } catch (e: any) {
-      alert(`批量删除团队地点失败: ${e.message || e}`);
+      toastError(`批量删除团队地点失败: ${e.message || e}`);
       return;
     }
   } else {
     batchDeletePersonalLocations(selectedLocIds.value);
     pushToCloud(true);
-    alert(`已成功删除选中的 ${selectedLocIds.value.length} 个地点！`);
+    toastSuccess(`已成功删除选中的 ${selectedLocIds.value.length} 个地点！`);
   }
 
   selectedLocIds.value = [];
@@ -557,9 +565,13 @@ async function handleConfirmBatchImport() {
   const isOverwrite = batchImportMode.value === 'overwrite';
   
   if (isOverwrite) {
-    if (!confirm(`警告：全量覆盖将清空现有的 ${locations.value.length} 个地点，确认使用本次解析出的 ${parsedPreview.value.length} 个地点替换吗？`)) {
-      return;
-    }
+    const ok = await toastConfirm({
+      title: '全量覆盖确认',
+      message: `警告：全量覆盖将清空现有的 ${locations.value.length} 个地点，确认使用本次解析出的 ${parsedPreview.value.length} 个地点替换吗？`,
+      danger: true,
+      confirmText: '覆盖导入',
+    });
+    if (!ok) return;
   }
 
   if (settings.value.soundEnabled) soundEffects.playTick(900);
@@ -567,15 +579,15 @@ async function handleConfirmBatchImport() {
   if (settings.value.activeMode === 'team') {
     try {
       await batchAddTeamLocations(parsedPreview.value, isOverwrite);
-      alert(`成功批量${isOverwrite ? '覆盖' : '追加'}导入 ${parsedPreview.value.length} 个团队地点！`);
+      toastSuccess(`成功批量${isOverwrite ? '覆盖' : '追加'}导入 ${parsedPreview.value.length} 个团队地点！`);
     } catch (e: any) {
-      alert(`团队地点导入失败: ${e.message || e}`);
+      toastError(`团队地点导入失败: ${e.message || e}`);
       return;
     }
   } else {
     batchAddLocations(parsedPreview.value, isOverwrite);
     pushToCloud(true);
-    alert(`成功批量${isOverwrite ? '覆盖' : '追加'}导入 ${parsedPreview.value.length} 个地点！`);
+    toastSuccess(`成功批量${isOverwrite ? '覆盖' : '追加'}导入 ${parsedPreview.value.length} 个地点！`);
   }
 
   batchInputText.value = '';
@@ -586,7 +598,7 @@ function handleSaveBudget() {
   if (settings.value.soundEnabled) soundEffects.playTick(900);
   settings.value.updatedAt = Date.now();
   pushToCloud(true);
-  alert('成功更新个人月度伙食预算！');
+  toastSuccess('已更新个人月度伙食预算！');
 }
 
 // 密码表单
@@ -717,7 +729,7 @@ async function handleBatchImageProcess(file: File) {
       }
       if (settings.value.soundEnabled) soundEffects.playWinSound();
     } else {
-      alert('从照片中未能识别出明显的文字，请尝试更换清晰的截图！');
+      toastError('从照片中未能识别出明显的文字，请尝试更换清晰的截图！');
     }
   } catch (err: any) {
     console.error('批量截图识别失败:', err);
@@ -753,13 +765,16 @@ const isAutoFilling = ref(false);
 
 async function handleAiAutoFillAllLocations() {
   if (locations.value.length === 0) {
-    alert('当前地点池为空，请先添加地点或进行批量导入！');
+    toastInfo('当前地点池为空，请先添加地点或进行批量导入！');
     return;
   }
 
-  if (!confirm(`确认要让 AI 智能扫描并补齐当前 ${locations.value.length} 个地点中缺失的推荐菜、人均预算与 Emoji 吗？`)) {
-    return;
-  }
+  const ok = await toastConfirm({
+    title: 'AI 智能补全',
+    message: `确认要让 AI 智能扫描并补齐当前 ${locations.value.length} 个地点中缺失的推荐菜、人均预算与 Emoji 吗？`,
+    confirmText: '开始补全',
+  });
+  if (!ok) return;
 
   try {
     isAutoFilling.value = true;
@@ -798,9 +813,10 @@ async function handleAiAutoFillAllLocations() {
 
     pushToCloud(true);
     if (settings.value.soundEnabled) soundEffects.playWinSound();
-    alert(`✨ 补全完成！AI 已自动补充并完善了 ${updatedCount} 个现有的地点/菜单属性！`);
+    toastSuccess(`✨ 补全完成！AI 已补充并完善了 ${updatedCount} 个地点/菜单属性！`);
   } catch (err: any) {
     console.error('AI 批量补全菜单失败:', err);
+    toastError('AI 批量补全失败，请稍后重试');
   } finally {
     isAutoFilling.value = false;
   }
@@ -811,17 +827,28 @@ function handleLogout() {
   emit('close');
 }
 
-function handleResetPool() {
-  if (confirm('确认将所有已抽中地点置为待抽状态？')) {
-    if (settings.value.soundEnabled) soundEffects.playTick(600);
-    resetPool();
-    pushToCloud(true);
-  }
+async function handleResetPool() {
+  const ok = await toastConfirm({
+    title: '重置抽签池',
+    message: '确认将所有已抽中地点置为待抽状态？',
+    confirmText: '重置',
+  });
+  if (!ok) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(600);
+  resetPool();
+  pushToCloud(true);
+  toastSuccess('抽签池已重置，所有地点可再次抽取');
 }
 
 async function handleRestoreDefault() {
-  if (confirm('警告：这将会把地点池重置为初始预设的 16+ 美食地点，自定义的地点将被覆盖。是否继续？')) {
-    if (settings.value.soundEnabled) soundEffects.playTick(600);
+  const ok = await toastConfirm({
+    title: '恢复预设地点',
+    message: '警告：这将会把地点池重置为系统预设的美食地点，自定义的地点将被覆盖。是否继续？',
+    danger: true,
+    confirmText: '恢复预设',
+  });
+  if (!ok) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(600);
     if (settings.value.activeMode === 'team') {
       try {
         const DEFAULT_LOCS = [
@@ -843,17 +870,15 @@ async function handleRestoreDefault() {
           { name: '海南鸡饭', emoji: '🐔', tags: ['鲜嫩', '米饭', '东南亚'], priceRange: '￥25-38', recommendedDish: '白切鸡饭三色酱', weight: 1 }
         ];
         await batchAddTeamLocations(DEFAULT_LOCS, true);
-        alert('已成功将团队地点恢复/填充为系统预设的 16+ 美食地点池！');
+        toastSuccess('已成功将团队地点恢复/填充为系统预设的美食地点池！');
       } catch (e: any) {
-        alert(`重置团队地点失败: ${e.message || e}`);
+        toastError(`重置团队地点失败: ${e.message || e}`);
       }
     } else {
       restoreDefaultLocations();
       pushToCloud(true);
     }
-  }
 }
-
 
 async function handleToggleVisibility(loc: BentoLocation) {
   if (settings.value.soundEnabled) soundEffects.playTick(500);
@@ -940,21 +965,29 @@ async function saveLoc() {
 }
 
 async function handleDeleteLoc(id: string) {
-  if (confirm('确定删除此午餐地点？')) {
-    if (settings.value.soundEnabled) soundEffects.playTick(300);
-    if (settings.value.activeMode === 'team') {
-      await deleteTeamLocation(id);
-    } else {
-      deleteLocation(id);
-    }
+  const ok = await toastConfirm({
+    title: '删除地点',
+    message: '确定删除此午餐地点？',
+    danger: true,
+    confirmText: '删除',
+  });
+  if (!ok) return;
+  if (settings.value.soundEnabled) soundEffects.playTick(300);
+  if (settings.value.activeMode === 'team') {
+    await deleteTeamLocation(id);
+  } else {
+    deleteLocation(id);
   }
+  toastSuccess('地点已删除');
 }
 
 function handleUpdatePassword() {
   const res = changePassword(pwdForm.value.oldPwd, pwdForm.value.newPwd);
-  alert(res.message);
   if (res.success) {
+    toastSuccess(res.message);
     pwdForm.value = { oldPwd: '', newPwd: '' };
+  } else {
+    toastError(res.message);
   }
 }
 
@@ -973,17 +1006,17 @@ function toggleAutoSync() {
 
 async function handlePushPersonal() {
   const res = await pushToCloud(false);
-  alert(res.message);
+  if (res.success) toastSuccess(res.message); else toastError(res.message);
 }
 
 async function handlePullPersonal() {
   const res = await pullFromCloud(false);
-  alert(res.message);
+  if (res.success) toastSuccess(res.message); else toastError(res.message);
 }
 
 async function handleSyncNow() {
   const res = await pullFromCloud(false);
-  alert(res.message);
+  if (res.success) toastSuccess(res.message); else toastError(res.message);
 }
 
 function handleImportFile(event: Event) {
@@ -996,10 +1029,10 @@ function handleImportFile(event: Event) {
     if (content) {
       const ok = importDataJSON(content);
       if (ok) {
-        alert('JSON 数据导入成功！');
+        toastSuccess('JSON 数据导入成功！');
         pushToCloud(true);
       } else {
-        alert('JSON 导入失败，请检查文件格式。');
+        toastError('JSON 导入失败，请检查文件格式。');
       }
     }
   };

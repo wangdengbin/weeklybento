@@ -52,6 +52,9 @@
       @close="showScanModal = false"
     />
 
+    <!-- 全局 Toast / 确认弹窗 -->
+    <ToastHost />
+
     <!-- 底部 H5 移动端 Sweet TabBar -->
     <nav class="bottom-nav">
       <button 
@@ -100,6 +103,7 @@ import AdminModal from './components/AdminModal.vue';
 import TeamWorkspaceModal from './components/TeamWorkspaceModal.vue';
 import AuthModal from './components/AuthModal.vue';
 import NearbyScanModal from './components/NearbyScanModal.vue';
+import ToastHost from './components/ToastHost.vue';
 import { soundEffects } from './composables/useAudio';
 import { useBentoStore } from './composables/useBentoStore';
 import { useTeamWorkspace } from './composables/useTeamWorkspace';
