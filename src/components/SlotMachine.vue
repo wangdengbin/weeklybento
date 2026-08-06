@@ -84,7 +84,7 @@
         </div>
 
         <!-- 主老虎机机器 Frame -->
-        <div class="machine-frame glass-card">
+        <div class="machine-frame glass-card" :class="{ 'is-winner': isWinner }">
           <div class="machine-header">
             <Sparkles class="sparkle-icon" :size="18" />
             <span>{{ settings.activeMode === 'team' ? 'BUDDY RANDOM ROLL' : 'BENTO RANDOM ROLL' }}</span>
@@ -102,6 +102,7 @@
           <div class="display-window">
             <!-- 渐变阴影遮罩 (顶部与底部) -->
             <div class="window-overlay"></div>
+            <div class="window-gloss"></div>
 
             <!-- 中奖高亮指示线框 -->
             <div class="target-highlight-bar">
@@ -356,8 +357,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { Sparkles, Dice5, RefreshCw, RotateCcw, Check, CalendarCheck, Search, Plus } from 'lucide-vue-next';
+import { useToast } from '../composables/useToast';
+const { success: toastSuccess, error: toastError, confirm: toastConfirm } = useToast();
 import confetti from 'canvas-confetti';
 import FoodDebateModal from './FoodDebateModal.vue';
 import { useBentoStore } from '../composables/useBentoStore';
@@ -514,10 +517,10 @@ async function selectLocationManually(loc: BentoLocation) {
       forceShowMachine.value = false;
       // 兜底反馈：若团队结果卡片条件未满足（如日期边界/数据未刷新），至少明确告知已选定
       if (!hasTodayTeamResult.value) {
-        alert(`已手动选定：${loc.emoji || '🍱'} ${loc.name}，并同步到搭子圈`);
+        toastSuccess(`已手动选定：${loc.emoji || '🍱'} ${loc.name}，并同步到搭子圈`);
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : '团队手动选定失败');
+      toastError(error instanceof Error ? error.message : '团队手动选定失败');
     } finally {
       isSubmittingManual.value = false;
     }
@@ -554,18 +557,21 @@ function handleRecordTeamResult() {
     });
   }
   if (settings.value.soundEnabled) soundEffects.playTick(900);
-  alert('已将今日团队选定菜单记录至您的个人日志！');
+  toastSuccess('已将今日团队选定菜单记录至您的个人日志！');
 }
 
-function handleRerollTeamResult() {
+async function handleRerollTeamResult() {
   if (!canReroll.value) {
-    alert('团队管理员已限制普通成员重新 Roll / 重新选定！');
+    toastError('团队管理员已限制普通成员重新 Roll / 重新选定！');
     return;
   }
   if (settings.value.soundEnabled) soundEffects.playTick(700);
-  if (confirm('确定重新抽取并重置团队选定菜单吗？')) {
-    forceShowMachine.value = true;
-  }
+  const ok = await toastConfirm({
+    title: '重新选定',
+    message: '确定重新抽取并重置团队选定菜单吗？全员将实时同步。',
+    confirmText: '重抽',
+  });
+  if (ok) forceShowMachine.value = true;
 }
 
 const FORTUNE_WORDS = [
@@ -582,28 +588,42 @@ const reel3Items = ref<string[]>(FORTUNE_WORDS);
 const reel1Offset = ref(0);
 const reel2Offset = ref(0);
 const reel3Offset = ref(0);
-const reelTransition = ref('transform 0.1s ease-out');
+const reelTransition = ref('none');
+
+const isWinner = ref(false);
 
 const ITEM_HEIGHT = 64; // 单项精准高度 (px)
+
+// —— 丝滑滚动参数：起步加速 → 长距离减速 → 三列依次刹停（经典老虎机节奏）——
+const BASE_ROW = 4;       // 每次滚动起始的基准行（复位点，保证条带永远向前滚、不穿帮）
+const SPIN_UP_ROWS = 9;   // 起步加速段前进的行数
+const SPIN_UP_MS = 520;   // 起步加速段时长 (ms)
+const STAGGER_MS = 150;   // 三列依次刹停的间隔 (ms)
+const DECEL_MS = 1850;    // 减速刹停段时长 (ms)
+// 注意：REEL_COPIES 为承重常量，勿轻易调小 —— 小池（如仅 1 个地点）时
+// 需靠 18 份拷贝才能让“中奖行”安全落位且不触底（见 startRoll 的 midIdx 边界计算）
+const REEL_COPIES = 18;   // 滚轮条带重复份数（保证足够长的视觉行程）
+const LAST_STOP_MS = SPIN_UP_MS + STAGGER_MS * 2 + DECEL_MS; // 最后一列刹停完成时刻
+const TOTAL_ROLL_MS = LAST_STOP_MS + 150;                    // 整轮动画总时长（含刹停余量）
 
 function prepareReels() {
   const currentPool = availablePool.value.length > 0 ? availablePool.value : locations.value;
   // 复制多份制造无限滚动的视觉
   const repeatedLocs: BentoLocation[] = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < REEL_COPIES; i++) {
     repeatedLocs.push(...currentPool);
   }
   reel2Items.value = repeatedLocs;
 
   const tagsList = ['🔥 极其过瘾', '🍜 汤汁浓郁', '🥗 健康清爽', '🍔 碳水快乐', '🍱 经典必吃', '🍲 鲜香味美'];
   const repeatedTags: string[] = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < REEL_COPIES; i++) {
     repeatedTags.push(...tagsList);
   }
   reel1Items.value = repeatedTags;
 
   const repeatedFortunes: string[] = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < REEL_COPIES; i++) {
     repeatedFortunes.push(...FORTUNE_WORDS);
   }
   reel3Items.value = repeatedFortunes;
@@ -631,7 +651,7 @@ async function startRoll() {
       };
     } catch (error) {
       forceShowMachine.value = false;
-      alert(error instanceof Error ? error.message : '团队抽签失败');
+      toastError(error instanceof Error ? error.message : '团队抽签失败');
       return;
     }
   } else {
@@ -640,6 +660,7 @@ async function startRoll() {
   if (!targetLoc) return;
 
   isRolling.value = true;
+  isWinner.value = false;
   if (settings.value.soundEnabled) soundEffects.playTick(500);
 
   prepareReels();
@@ -651,18 +672,69 @@ async function startRoll() {
       break;
     }
   }
-  const targetReel2Index = (targetIndexInPool >= 1 ? targetIndexInPool : Math.floor(reel2Items.value.length / 2)) - 1;
 
-  const targetReel1Index = Math.floor(Math.random() * (reel1Items.value.length - 10)) + 5;
-  const targetReel3Index = Math.floor(Math.random() * (reel3Items.value.length - 10)) + 5;
+  // —— 计算三列最终刹停位置（中奖行 = 中间行，展示条带第 midX 项）——
+  const poolSize = (availablePool.value.length > 0 ? availablePool.value : locations.value).length || 1;
+  const minMidRow = BASE_ROW + SPIN_UP_ROWS + 2;
 
-  // 设置动画
-  reelTransition.value = 'transform 2.5s cubic-bezier(0.15, 0.85, 0.35, 1.02)';
-  reel1Offset.value = Math.max(0, targetReel1Index) * ITEM_HEIGHT;
-  reel2Offset.value = Math.max(0, targetReel2Index) * ITEM_HEIGHT;
-  reel3Offset.value = Math.max(0, targetReel3Index) * ITEM_HEIGHT;
+  let midIdx = targetIndexInPool >= 1 ? targetIndexInPool : poolSize * 5;
+  // 保证目标行落在条带范围内，且始终向“前方”减速（可安全刹停不穿帮）
+  while (midIdx > REEL_COPIES * poolSize - 3) midIdx -= poolSize;
+  while (midIdx - 1 < minMidRow) midIdx += poolSize;
 
-  // 播放转动喀哒音效
+  const r1Rows = reel1Items.value.length;
+  const r3Rows = reel3Items.value.length;
+  const mid1 = Math.min(r1Rows - 2, Math.max(minMidRow, Math.floor(Math.random() * (r1Rows - minMidRow - 2)) + minMidRow));
+  const mid3 = Math.min(r3Rows - 2, Math.max(minMidRow, Math.floor(Math.random() * (r3Rows - minMidRow - 2)) + minMidRow));
+
+  const target1Offset = (mid1 - 1) * ITEM_HEIGHT;
+  const target2Offset = (midIdx - 1) * ITEM_HEIGHT;
+  const target3Offset = (mid3 - 1) * ITEM_HEIGHT;
+
+  // —— 三段式丝滑动画：无动画复位 → 起步加速 → 逐列长减速刹停（左→中→右）——
+  const spinUpTransition = `transform ${SPIN_UP_MS}ms cubic-bezier(0.45, 0.05, 0.85, 0.55)`;
+  const decelTransition = `transform ${DECEL_MS}ms cubic-bezier(0.12, 0.75, 0.25, 1.08)`;
+  const baseOffset = BASE_ROW * ITEM_HEIGHT;
+  const spinUpOffset = (BASE_ROW + SPIN_UP_ROWS) * ITEM_HEIGHT;
+
+  // 第 1 帧：瞬间复位到基准行（避免上一轮高位偏移造成条带触底/穿帮）
+  reelTransition.value = 'none';
+  reel1Offset.value = baseOffset;
+  reel2Offset.value = baseOffset;
+  reel3Offset.value = baseOffset;
+  await nextTick();
+  await nextTick();
+
+  // 第 2 帧：三列同步高速起步，并记录“实际启动时刻”（以它为准安排后续刹停，避免 DOM 重建耗时造成时序偏移）
+  const spinStart = performance.now();
+  reelTransition.value = spinUpTransition;
+  reel1Offset.value = spinUpOffset;
+  reel2Offset.value = spinUpOffset;
+  reel3Offset.value = spinUpOffset;
+
+  // 相对 spinStart 定时，确保起步加速段完整播完后再依次刹停
+  const at = (delay: number, fn: () => void) => {
+    window.setTimeout(fn, Math.max(0, spinStart + delay - performance.now()));
+  };
+  at(SPIN_UP_MS, () => {
+    reelTransition.value = decelTransition;
+    reel1Offset.value = target1Offset;
+  });
+  at(SPIN_UP_MS + STAGGER_MS, () => {
+    reelTransition.value = decelTransition;
+    reel2Offset.value = target2Offset;
+  });
+  at(SPIN_UP_MS + STAGGER_MS * 2, () => {
+    reelTransition.value = decelTransition;
+    reel3Offset.value = target3Offset;
+  });
+
+  // 最后一列刹停前点亮中奖线，让用户先看到“命中”反馈，再弹结果窗
+  at(LAST_STOP_MS - 80, () => {
+    isWinner.value = true;
+  });
+
+  // 播放转动喀哒音效（随转速逐渐变慢）
   let audioTimer: number | undefined;
   if (settings.value.soundEnabled) {
     let interval = 80;
@@ -676,9 +748,10 @@ async function startRoll() {
     playLoop();
   }
 
-  // 动画结束 (2.5s)
-  setTimeout(() => {
+  // 动画结束（以 spinStart 为基准，三列全部刹停并回弹稳定后再弹结果）
+  at(TOTAL_ROLL_MS, () => {
     isRolling.value = false;
+    isWinner.value = true;
     if (settings.value.activeMode === 'team') forceShowMachine.value = false;
     if (audioTimer) clearTimeout(audioTimer);
 
@@ -698,9 +771,9 @@ async function startRoll() {
     // 触发抽中回调
     emit('roll-complete', {
       location: targetLoc,
-      fortune: reel3Items.value[targetReel3Index + 1] || '今日美味特供！'
+      fortune: reel3Items.value[mid3] || '今日美味特供！'
     });
-  }, 2600);
+  });
 }
 
 function handleResetPool() {
@@ -742,12 +815,13 @@ function handleResetPool() {
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
   font-size: 0.85rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
 }
 
 .status-left {
@@ -835,13 +909,42 @@ function handleResetPool() {
   gap: 4px;
 }
 
+/* 老虎机主机身：深色高对比“豪华机柜”，在浅色背景中成为视觉主角 */
 .machine-frame {
-  padding: 20px 16px;
+  position: relative;
+  padding: 20px 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: linear-gradient(180deg, #FFFFFF 0%, #FFF5EE 100%);
-  border: 2px solid #FFE4D6;
+  background: linear-gradient(180deg, #2E3238 0%, #1B1D22 58%, #131418 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -18px 40px rgba(0, 0, 0, 0.25),
+    0 24px 50px -16px rgba(15, 23, 42, 0.35);
+  animation: cabinetIn 0.45s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+.machine-frame.glass-card:active {
+  transform: none;
+}
+
+/* 顶部贯穿高光线，提升机柜质感 */
+.machine-frame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 26px;
+  right: 26px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  pointer-events: none;
+}
+
+@keyframes cabinetIn {
+  from { transform: translateY(14px) scale(0.985); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .machine-header {
@@ -849,14 +952,19 @@ function handleResetPool() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 800;
-  color: var(--primary);
-  letter-spacing: 1px;
+  letter-spacing: 2.5px;
+  background: linear-gradient(90deg, #FFB27D 0%, #FF6B35 45%, #FFC72C 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  padding: 2px 0 4px;
 }
 
 .sparkle-icon {
-  color: var(--accent);
+  color: #FFC72C;
 }
 
 /* 栏目标题头 Row */
@@ -868,14 +976,15 @@ function handleResetPool() {
 }
 
 .column-title {
-  font-size: 0.72rem;
-  color: var(--text-muted);
+  font-size: 0.7rem;
+  color: #8A8F98;
   font-weight: 700;
   text-align: center;
+  letter-spacing: 0.5px;
 }
 
 .column-title.main-title {
-  color: var(--primary);
+  color: #FFB27D;
 }
 
 /* 老虎机 Display 窗口 */
@@ -884,13 +993,18 @@ function handleResetPool() {
   grid-template-columns: 1fr 1.6fr 1fr;
   gap: 8px;
   height: 192px; /* 3 * 64px 精确高度 */
-  background: #18181B;
-  border-radius: var(--radius-md);
-  padding: 0 6px;
+  background:
+    radial-gradient(130% 90% at 50% 0%, rgba(255, 107, 53, 0.1) 0%, rgba(0, 0, 0, 0) 58%),
+    #0B0C0F;
+  border-radius: 20px;
+  padding: 0 8px;
   position: relative;
   overflow: hidden;
-  box-shadow: inset 0 8px 20px rgba(0, 0, 0, 0.7);
-  border: 3px solid #FFD8CC;
+  box-shadow:
+    inset 0 12px 28px rgba(0, 0, 0, 0.65),
+    inset 0 -12px 28px rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.09);
+  transition: border-color 0.3s ease;
 }
 
 /* 顶部与底部渐变阴影覆盖 */
@@ -901,43 +1015,83 @@ function handleResetPool() {
   right: 0;
   bottom: 0;
   background: linear-gradient(
-    180deg, 
-    rgba(24, 24, 27, 0.92) 0%, 
-    rgba(0, 0, 0, 0) 30%, 
-    rgba(0, 0, 0, 0) 70%, 
-    rgba(24, 24, 27, 0.92) 100%
+    180deg,
+    rgba(11, 12, 15, 0.96) 0%,
+    rgba(11, 12, 15, 0.1) 26%,
+    rgba(11, 12, 15, 0.1) 74%,
+    rgba(11, 12, 15, 0.96) 100%
   );
   pointer-events: none;
   z-index: 10;
+}
+
+/* 窗口顶部玻璃反光线 */
+.window-gloss {
+  position: absolute;
+  top: 3px;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  pointer-events: none;
+  z-index: 11;
 }
 
 /* 精确中间中奖区域高亮框 */
 .target-highlight-bar {
   position: absolute;
   top: 64px; /* 精确定位在第2行 (64px - 128px) */
-  left: 4px;
-  right: 4px;
+  left: 8px;
+  right: 8px;
   height: 64px;
-  border-top: 2px dashed #F59E0B;
-  border-bottom: 2px dashed #F59E0B;
-  background: rgba(245, 158, 11, 0.12);
+  border-top: 2px solid rgba(245, 179, 1, 0.85);
+  border-bottom: 2px solid rgba(245, 179, 1, 0.85);
+  background: linear-gradient(180deg, rgba(245, 179, 1, 0.14) 0%, rgba(245, 179, 1, 0.05) 100%);
+  box-shadow: 0 0 18px rgba(245, 179, 1, 0.28);
   pointer-events: none;
-  z-index: 9;
+  z-index: 12; /* 置于遮罩之上，保证中奖线不被顶部/底部渐变压暗 */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 2px;
 }
 
 .pointer-arrow {
-  color: #F59E0B;
-  font-size: 0.7rem;
-  animation: blink 1s infinite alternate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #F5B301;
+  font-size: 0.55rem;
+  background: rgba(245, 179, 1, 0.14);
+  border: 1px solid rgba(245, 179, 1, 0.45);
+  animation: blink 1.2s ease-in-out infinite alternate;
 }
 
 @keyframes blink {
-  from { opacity: 0.5; }
-  to { opacity: 1; }
+  from { opacity: 0.45; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 抽中瞬间：中奖线脉冲 + 窗口描边点亮 */
+.machine-frame.is-winner .target-highlight-bar {
+  background: linear-gradient(180deg, rgba(245, 179, 1, 0.28) 0%, rgba(245, 179, 1, 0.1) 100%);
+  animation: winPulse 0.45s ease-in-out infinite alternate;
+}
+
+.machine-frame.is-winner .display-window {
+  border-color: rgba(245, 179, 1, 0.55);
+}
+
+.machine-frame.is-winner .pointer-arrow {
+  background: rgba(245, 179, 1, 0.32);
+}
+
+@keyframes winPulse {
+  from { box-shadow: 0 0 10px rgba(245, 179, 1, 0.35); }
+  to { box-shadow: 0 0 26px rgba(245, 179, 1, 0.8); }
 }
 
 .reel-column {
@@ -946,6 +1100,19 @@ function handleResetPool() {
   align-items: center;
   overflow: hidden;
   height: 100%;
+  position: relative;
+}
+
+/* 列间垂直高光线，增强“三槽”机械感 */
+.reel-column + .reel-column::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  z-index: 8;
 }
 
 .reel-viewport {
@@ -970,15 +1137,18 @@ function handleResetPool() {
   color: #F4F4F5;
   font-weight: 600;
   text-align: center;
+  will-change: transform;
 }
 
 .reel-tag {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #FDE047;
-  background: rgba(254, 240, 138, 0.15);
-  padding: 4px 8px;
-  border-radius: 12px;
+  background: rgba(253, 224, 71, 0.12);
+  border: 1px solid rgba(253, 224, 71, 0.22);
+  padding: 3px 9px;
+  border-radius: 10px;
   white-space: nowrap;
+  letter-spacing: 0.5px;
 }
 
 .loc-item {
@@ -991,25 +1161,28 @@ function handleResetPool() {
 }
 
 .item-emoji {
-  font-size: 1.4rem;
+  font-size: 1.55rem;
   line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 
 .item-name {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 800;
   color: #FFFFFF;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-  max-width: 100px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  max-width: 104px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 
 .reel-fortune {
   font-size: 0.78rem;
   color: #FF8E53;
   font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .action-bar {
@@ -1017,12 +1190,47 @@ function handleResetPool() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .roll-btn {
   width: 100%;
-  height: 56px;
+  height: 58px;
+  border-radius: 20px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 12px 26px rgba(255, 107, 53, 0.38);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 按钮掠过光效（鼠标悬浮时从左扫过） */
+.roll-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.45s ease;
+}
+
+.roll-btn:not(:disabled):hover::after {
+  left: 130%;
+}
+
+.roll-btn:disabled {
+  background: #3A3D45;
+  color: #9CA3AF;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.roll-btn:not(:disabled):active {
+  transform: scale(0.97);
 }
 
 .btn-inner {
@@ -1190,9 +1398,10 @@ function handleResetPool() {
   gap: 6px;
   padding: 6px;
   margin-bottom: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  border-radius: 20px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
 }
 
 .cat-tab-btn {
@@ -1201,15 +1410,16 @@ function handleResetPool() {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 4px;
+  padding: 9px 4px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 14px;
   background: transparent;
   color: #64748B;
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+  min-height: 40px; /* 触控目标达标 */
 }
 
 .cat-tab-btn:hover {
@@ -1218,9 +1428,11 @@ function handleResetPool() {
 }
 
 .cat-tab-btn.active {
-  background: #FF6B00;
+  background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
   color: #FFFFFF;
-  box-shadow: 0 3px 10px rgba(255, 107, 0, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 4px 12px rgba(255, 107, 0, 0.3);
 }
 
 .cat-emoji {
@@ -1231,9 +1443,10 @@ function handleResetPool() {
 .daily-bento-checklist {
   margin-top: 16px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 237, 213, 0.8);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
 }
 
 .checklist-header {
@@ -1711,5 +1924,26 @@ function handleResetPool() {
 .ai-debate-trigger-btn:hover {
   transform: translateY(-1px) scale(1.04);
   box-shadow: 0 4px 10px rgba(255, 102, 0, 0.2);
+}
+
+/* 桌面端加宽布局：餐池 Tab 与打卡清单充分利用宽度 */
+@media (min-width: 768px) {
+  .meal-categories-selector {
+    padding: 8px;
+  }
+
+  .cat-tab-btn {
+    flex: 1;
+  }
+
+  .checklist-items {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .machine-frame {
+    padding: 22px 26px 20px;
+  }
 }
 </style>
