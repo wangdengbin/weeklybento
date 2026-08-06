@@ -243,7 +243,8 @@
 import { ref, watch } from 'vue';
 import { Database, Plus, Share2, Users, X, Trash2, LogOut, CheckCircle2, UserPlus, ShieldAlert, Lock, LogIn, RefreshCw, Shield } from 'lucide-vue-next';
 import { useBentoStore } from '../composables/useBentoStore';
-import { useTeamWorkspace, getErrorMessage } from '../composables/useTeamWorkspace';
+import { useTeamWorkspace } from '../composables/useTeamWorkspace';
+import { getErrorMessage } from '../utils/error';
 import { useAuth } from '../composables/useAuth';
 import { soundEffects } from '../composables/useAudio';
 

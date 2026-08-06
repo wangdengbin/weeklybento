@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { getTodayDateString } from '../utils/date';
+import { getErrorMessage } from '../utils/error';
+import { ensureAnonymousSession, isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { BentoLocation, DailyRecord, TeamPermissions, TeamRollResult } from '../types';
 
 type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
@@ -30,29 +32,6 @@ const isLoading = ref(false);
 const errorMessage = ref('');
 const pendingInviteUrl = ref('');
 let channel: RealtimeChannel | null = null;
-
-export function getErrorMessage(error: unknown): string {
-  if (!error) return '';
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'object') {
-    const errObj = error as Record<string, any>;
-    if (errObj.message && typeof errObj.message === 'string') return errObj.message;
-    if (errObj.error_description && typeof errObj.error_description === 'string') return errObj.error_description;
-    if (errObj.details && typeof errObj.details === 'string') return errObj.details;
-    if (errObj.hint && typeof errObj.hint === 'string') return errObj.hint;
-    try {
-      return JSON.stringify(error);
-    } catch (e) {
-      return String(error);
-    }
-  }
-  return String(error);
-}
-
-function today() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-}
 
 const defaultPermissions: TeamPermissions = {
   allowMemberReroll: true,
@@ -112,14 +91,6 @@ function mapLocation(row: any): BentoLocation {
     mealCategories: row.meal_categories || row.mealCategories || undefined,
     visible: !isHidden,
   };
-}
-
-async function ensureAnonymousSession() {
-  if (!supabase) throw new Error('尚未配置 Supabase');
-  const { data } = await supabase.auth.getSession();
-  if (data.session) return;
-  const { error } = await supabase.auth.signInAnonymously();
-  if (error) throw error;
 }
 
 async function checkNotAnonymous() {
@@ -244,7 +215,7 @@ async function loadWorkspace() {
     };
   });
 
-  const todayStr = today();
+  const todayStr = getTodayDateString();
   const todayDraw = (drawRows || []).find((d: any) => d.business_date === todayStr);
   if (todayDraw) {
     const locRow = todayDraw.team_locations;

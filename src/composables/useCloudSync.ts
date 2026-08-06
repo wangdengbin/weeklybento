@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { ensureAnonymousSession, isSupabaseConfigured, supabase } from '../lib/supabase';
+import { getErrorMessage } from '../utils/error';
 import { useBentoStore } from './useBentoStore';
 import type { AppSettings, BentoLocation, DailyRecord } from '../types';
 
@@ -23,15 +24,7 @@ function timeNow(): string {
 }
 
 function errorMessage(error: unknown): string {
-  if (!error) return '未知错误';
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'object') {
-    const e = error as Record<string, any>;
-    if (e.message) return String(e.message);
-    if (e.error_description) return String(e.error_description);
-    if (e.details) return String(e.details);
-  }
-  return String(error);
+  return getErrorMessage(error) || '未知错误';
 }
 
 function syncConfig(): { enabled: boolean; autoSync: boolean } {
@@ -47,9 +40,13 @@ async function getUserId(): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   if (data.session?.user) return data.session.user.id;
-  const { data: anonData, error } = await supabase.auth.signInAnonymously();
-  if (error || !anonData.session) return null;
-  return anonData.session.user.id;
+  try {
+    await ensureAnonymousSession();
+    const { data: after } = await supabase.auth.getSession();
+    return after.session?.user?.id || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // ---- 时间戳：旧数据缺失 updatedAt 时用可复现的时间兜底，避免误判为“最新” ----

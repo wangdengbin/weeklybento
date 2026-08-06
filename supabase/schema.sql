@@ -240,20 +240,39 @@ declare
   total_weight numeric;
   target_weight numeric;
   business_day date := (now() at time zone 'Asia/Shanghai')::date;
+  week_start date;
 begin
-  if not public.is_team_member(p_team_id) then raise exception 'team membership required'; end if;
+  if not public.is_team_member(p_team_id) then raise exception 'team not found'; end if;
   perform pg_advisory_xact_lock(hashtextextended(p_team_id::text || business_day::text, 0));
   select * into current_draw from team_draws where team_id = p_team_id and business_date = business_day;
 
   if current_draw.id is null or p_force then
-    select sum(weight) into total_weight from team_locations where team_id = p_team_id;
+    -- 本周起点：周一 (Asia/Shanghai 业务日期)
+    week_start := business_day - ((extract(dow from business_day) + 6) % 7);
+    if (select count(*) from team_locations where team_id = p_team_id and id not in (
+      select location_id from team_draws where team_id = p_team_id and business_date >= week_start
+    )) = 0 then
+      -- 本周全选过，退回全量池，允许再次 Roll
+      week_start := null;
+    end if;
+
+    select sum(weight) into total_weight
+    from team_locations
+    where team_id = p_team_id
+      and (week_start is null or id not in (
+        select location_id from team_draws where team_id = p_team_id and business_date >= week_start
+      ));
     if coalesce(total_weight, 0) = 0 then raise exception 'team menu is empty'; end if;
     target_weight := random() * total_weight;
     select l.* into picked
     from team_locations l
     join (
       select id, sum(weight) over (order by created_at, id) as cumulative_weight
-      from team_locations where team_id = p_team_id
+      from team_locations
+      where team_id = p_team_id
+        and (week_start is null or id not in (
+          select location_id from team_draws where team_id = p_team_id and business_date >= week_start
+        ))
     ) weighted on weighted.id = l.id
     where weighted.cumulative_weight >= target_weight
     order by weighted.cumulative_weight limit 1;
