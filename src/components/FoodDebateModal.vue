@@ -37,19 +37,19 @@
       <div class="action-btn-row">
         <button 
           type="button" 
-          class="btn-secondary small-btn" 
-          @click="randomizeSelection"
-        >
-          🎲 随机二选一
-        </button>
-        <button 
-          type="button" 
           class="btn-primary start-debate-btn" 
           :disabled="isAiLoading || !selectedLoc1 || !selectedLoc2 || selectedLoc1.id === selectedLoc2.id"
           @click="startDebate"
         >
           <Sparkles :size="16" />
           <span>{{ isAiLoading ? '评委激烈辩论中...' : '🔥 开始 AI 美食大辩论' }}</span>
+        </button>
+        <button 
+          type="button" 
+          class="btn-secondary small-btn sub-random-btn" 
+          @click="randomizeSelection"
+        >
+          🎲 随机换两家二选一
         </button>
       </div>
 
@@ -231,16 +231,26 @@ async function startDebate() {
 
 .action-btn-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
   margin-bottom: 16px;
 }
 
 .start-debate-btn {
   background: linear-gradient(135deg, #FF9933 0%, #FF6600 100%) !important;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  padding: 11px;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+.sub-random-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .error-msg {

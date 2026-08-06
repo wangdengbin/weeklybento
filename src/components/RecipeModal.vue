@@ -135,22 +135,22 @@ async function handleFetchRecipe() {
 async function processImage(file: File) {
   try {
     isCompressing.value = true;
-    compressedSizeText.value = '';
+    compressedSizeText.value = '⚡ 本地 OCR 识别中...';
 
-    // 1. 优先尝试纯前端提取图片文字/菜名
+    // 1. 优先调取纯前端 Tesseract.js OCR 提取中英文文字
     const extractedText = await tryExtractTextFromImage(file);
 
     if (extractedText) {
-      // 成功提取到文本 -> 仅传纯文字 (Token 消耗趋近于 0！)
-      compressedSizeText.value = '⚡ 前端纯文字提取 (免图 Token)';
+      // 成功提取到中文字符文本
+      compressedSizeText.value = '⚡ 本地 OCR 成功提取';
       inputDishName.value = extractedText;
     } else {
-      // 未提炼出文本 -> 进行微型 Canvas 图片压缩降级发送
-      const compressedBase64 = await compressImageFile(file, 600, 0.65);
+      // 未提炼出字符，走 850px / 0.82 高清图像识别通道
+      const compressedBase64 = await compressImageFile(file, 850, 0.82);
       const sizeKB = Math.round(compressedBase64.length / 1024);
-      compressedSizeText.value = `图片降级 ${sizeKB} KB`;
+      compressedSizeText.value = `高清图 ${sizeKB} KB`;
 
-      const textRes = await parseLocationText(`图片识图: ${file.name}`);
+      const textRes = await parseLocationText(file.name.replace(/\.[^/.]+$/, "") || '特色美味菜品');
       if (textRes && textRes.name) {
         inputDishName.value = textRes.name;
       } else {

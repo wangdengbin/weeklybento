@@ -49,23 +49,33 @@
         </div>
       </div>
 
-      <div class="toolbar">
-        <button class="btn-primary add-loc-btn" @click="openAddLocModal">
-          <Plus :size="16" />
-          <span>添加新午餐地点</span>
-        </button>
-        <button class="btn-secondary" @click="showBatchModal = true" title="批量多行文本导入地点">
-          <FileText :size="14" />
-          <span>批量文本导入</span>
-        </button>
-        <button v-if="selectedLocIds.length > 0" class="btn-danger" @click="handleBatchDelete">
-          <Trash2 :size="14" />
-          <span>批量删除 ({{ selectedLocIds.length }})</span>
-        </button>
-        <button v-if="settings.activeMode === 'personal'" class="btn-secondary" @click="handleResetPool" title="重置本轮池子">
-          <RotateCcw :size="14" />
-          <span>重置抽签状态</span>
-        </button>
+      <div class="toolbar-wrapper">
+        <div class="toolbar-row ai-row">
+          <button class="btn-secondary ai-autofill-btn ai-glow-pill full-width-btn" :disabled="isAutoFilling" @click="handleAiAutoFillAllLocations" title="让 AI 自动扫描当前地址池，智能补全所有缺失的推荐菜、Emoji与人均价格">
+            <Sparkles :size="15" class="ai-sparkle-icon" />
+            <span>{{ isAutoFilling ? 'AI 智能分析补全中...' : '✨ AI 智能补全现有地址池 (推荐菜/人均/Emoji)' }}</span>
+          </button>
+        </div>
+        <div class="toolbar-row action-row">
+          <button class="btn-primary add-loc-btn" @click="openAddLocModal">
+            <Plus :size="16" />
+            <span>添加新午餐地点</span>
+          </button>
+          <button class="btn-secondary flex-1" @click="showBatchModal = true" title="支持多行文本或美团/大众点评地址截图批量导入">
+            <FileText :size="14" />
+            <span>批量文本/截图导入</span>
+          </button>
+        </div>
+        <div v-if="selectedLocIds.length > 0 || settings.activeMode === 'personal'" class="toolbar-row sub-action-row">
+          <button v-if="selectedLocIds.length > 0" class="btn-danger flex-1" @click="handleBatchDelete">
+            <Trash2 :size="14" />
+            <span>批量删除 ({{ selectedLocIds.length }})</span>
+          </button>
+          <button v-if="settings.activeMode === 'personal'" class="btn-secondary flex-1" @click="handleResetPool" title="重置本轮池子">
+            <RotateCcw :size="14" />
+            <span>重置抽签状态</span>
+          </button>
+        </div>
       </div>
 
       <!-- 批量选择控制工具条 -->
@@ -176,16 +186,19 @@
             <span>开启自动同步（数据变更后自动上传云端）</span>
           </label>
 
-          <div class="cloud-btn-row">
-            <button class="btn-primary small-btn" :disabled="isSyncing" @click="handleSyncNow">
-              <CloudCloud :size="14" /> 立即同步
+          <div class="cloud-btn-wrapper">
+            <button class="btn-primary main-sync-btn" :disabled="isSyncing" @click="handleSyncNow">
+              <CloudCloud :size="16" />
+              <span>☁️ 立即同步 (推荐)</span>
             </button>
-            <button class="btn-secondary small-btn" :disabled="isSyncing" @click="handlePushPersonal">
-              <UploadCloud :size="14" /> 推送到云端
-            </button>
-            <button class="btn-secondary small-btn" :disabled="isSyncing" @click="handlePullPersonal">
-              <DownloadCloud :size="14" /> 从云端拉取
-            </button>
+            <div class="sub-sync-row">
+              <button class="btn-secondary small-btn flex-1" :disabled="isSyncing" @click="handlePushPersonal">
+                <UploadCloud :size="14" /> 推送到云端
+              </button>
+              <button class="btn-secondary small-btn flex-1" :disabled="isSyncing" @click="handlePullPersonal">
+                <DownloadCloud :size="14" /> 从云端拉取
+              </button>
+            </div>
           </div>
 
           <div v-if="syncLog" class="sync-log-box">{{ syncLog }}</div>
@@ -231,9 +244,9 @@
         <h3 class="modal-title">{{ isEditLoc ? '编辑午餐地点' : '新增午餐地点' }}</h3>
         
         <!-- ✨ AI 智能识别粘贴/识图填表卡片 -->
-        <div class="ai-parse-card" @paste="handleAdminPaste">
+        <div class="ai-parse-card" :class="{ 'ai-loading-pulse': isAiParsing || isAiImgProcessing }" @paste="handleAdminPaste">
           <div class="ai-card-title">
-            <Sparkles :size="15" class="text-orange" />
+            <Sparkles :size="15" class="ai-sparkle-icon text-orange" />
             <span>✨ AI 智能识图/截图自动填表</span>
             <span v-if="aiImgSizeText" class="compress-badge-sm">{{ aiImgSizeText }}</span>
           </div>
@@ -252,7 +265,7 @@
             </label>
             <button 
               type="button" 
-              class="btn-primary small-btn ai-btn" 
+              class="btn-primary small-btn ai-btn ai-glow-btn" 
               :disabled="isAiParsing || isAiImgProcessing || (!aiInputText.trim() && !isAiImgProcessing)"
               @click="handleAiParse"
             >
@@ -342,26 +355,29 @@
       </div>
     </div>
 
-    <!-- 批量文本导入 Modal -->
+    <!-- 批量文本/截图导入 Modal -->
     <div v-if="showBatchModal" class="modal-overlay" @click.self="showBatchModal = false">
-      <div class="modal-content batch-modal-content">
-        <h3 class="modal-title">📝 批量文本导入地点池</h3>
-        <p class="modal-sub">支持多行文本，格式如：<code>地点名称 （标签：标签1, 标签2）</code></p>
+      <div class="modal-content batch-modal-content" @paste="handleBatchPaste">
+        <h3 class="modal-title">📝 批量文本 / 地址截图导入</h3>
+        <p class="modal-sub">支持多行文本，或点击右侧<b>选择美团/大众点评地址截图 / 按 Ctrl+V 粘贴</b>由 AI 自动解析拆分</p>
 
         <div class="quick-sample-row">
+          <label class="btn-secondary small-btn upload-img-btn" title="上传大众点评/美团/订单地址截图">
+            <Upload :size="13" />
+            <span>{{ isBatchImgProcessing ? 'OCR 识图中...' : '📷 选择地址截图识别' }}</span>
+            <input type="file" accept="image/*" @change="handleBatchFileSelect" hidden />
+          </label>
           <button type="button" class="btn-text-link" @click="fillSampleText">
-            📋 填入 5 个经典示例数据
+            📋 填入 5 个示例
           </button>
         </div>
 
         <textarea 
           v-model="batchInputText" 
-          placeholder="在此粘贴多行地点数据，例如：
-汆悦麻辣烫 （标签：麻辣烫, 自选, 汤底）
-丰香园 （标签：中餐炒菜, 炒菜, 中餐）
-刘一手 （标签：自助菜, 自助餐, 快餐）
-平安美食城 （标签：综合, 美食城, 档口）
-上海浓汤面 （标签：面条, 汤面, 本帮面）" 
+          placeholder="在此粘贴多行地点文字，或直接在弹窗内按 Ctrl+V 粘贴菜单截图照片！例如：
+汆悦麻辣烫 （标签：麻辣烫, 自选）
+丰香园 （标签：中餐炒菜, 炒菜）
+塔斯汀中国汉堡 （标签：汉堡, 快餐）" 
           rows="6" 
           class="textarea-field"
         ></textarea>
@@ -626,22 +642,22 @@ function applyParsedToForm(res: any) {
 async function handleAdminImageProcess(file: File) {
   try {
     isAiImgProcessing.value = true;
-    aiImgSizeText.value = '';
+    aiImgSizeText.value = '⚡ 本地 OCR 识别中...';
     if (settings.value.soundEnabled) soundEffects.playTick(600);
 
     let textToParse = '';
 
-    // 1. 优先尝试纯前端提取图片文字 (免图 Token)
+    // 1. 优先调取纯前端 Tesseract.js OCR 提取中英文文字
     const extractedText = await tryExtractTextFromImage(file);
     if (extractedText) {
-      aiImgSizeText.value = '⚡ 免图 Token';
+      aiImgSizeText.value = '⚡ 本地 OCR 成功提取 (免图 Token)';
       textToParse = extractedText;
     } else {
-      // 降级为 Canvas 微型图片压缩发送
-      const compressedBase64 = await compressImageFile(file, 600, 0.65);
+      // 若未提取出中文字符，走 850px / 0.82 高清增强通道
+      const compressedBase64 = await compressImageFile(file, 850, 0.82);
       const sizeKB = Math.round(compressedBase64.length / 1024);
-      aiImgSizeText.value = `图降级 ${sizeKB} KB`;
-      textToParse = `图片识图: ${file.name}`;
+      aiImgSizeText.value = `高清图 ${sizeKB} KB`;
+      textToParse = file.name.replace(/\.[^/.]+$/, "") || '特色美食';
     }
 
     const res = await parseLocationText(textToParse);
@@ -674,6 +690,113 @@ function handleAdminPaste(e: ClipboardEvent) {
         break;
       }
     }
+  }
+}
+
+// 批量导入弹窗 - 菜单大图/截图处理逻辑
+const isBatchImgProcessing = ref(false);
+
+async function handleBatchImageProcess(file: File) {
+  try {
+    isBatchImgProcessing.value = true;
+    if (settings.value.soundEnabled) soundEffects.playTick(600);
+
+    // 1. 本地 Tesseract.js OCR 提取大图所有文字
+    const extractedText = await tryExtractTextFromImage(file);
+    if (extractedText) {
+      if (batchInputText.value.trim()) {
+        batchInputText.value += '\n' + extractedText;
+      } else {
+        batchInputText.value = extractedText;
+      }
+      if (settings.value.soundEnabled) soundEffects.playWinSound();
+    } else {
+      alert('从照片中未能识别出明显的文字，请尝试更换清晰的截图！');
+    }
+  } catch (err: any) {
+    console.error('批量截图识别失败:', err);
+  } finally {
+    isBatchImgProcessing.value = false;
+  }
+}
+
+function handleBatchFileSelect(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    handleBatchImageProcess(target.files[0]);
+  }
+}
+
+function handleBatchPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image') !== -1) {
+      const file = items[i].getAsFile();
+      if (file) {
+        handleBatchImageProcess(file);
+        break;
+      }
+    }
+  }
+}
+
+// ✨ AI 智能一键补全当前所有现有地点/菜单属性
+const isAutoFilling = ref(false);
+
+async function handleAiAutoFillAllLocations() {
+  if (locations.value.length === 0) {
+    alert('当前地点池为空，请先添加地点或进行批量导入！');
+    return;
+  }
+
+  if (!confirm(`确认要让 AI 智能扫描并补齐当前 ${locations.value.length} 个地点中缺失的推荐菜、人均预算与 Emoji 吗？`)) {
+    return;
+  }
+
+  try {
+    isAutoFilling.value = true;
+    let updatedCount = 0;
+
+    for (const loc of locations.value) {
+      // 只要缺失推荐菜，或者缺少 emoji，或者只有默认 🍱 符号
+      if (!loc.recommendedDish || !loc.emoji || loc.emoji === '🍱' || !loc.tags || loc.tags.length === 0) {
+        const promptText = `地点名称: ${loc.name}，现有标签: ${(loc.tags || []).join(',')}`;
+        const res = await parseLocationText(promptText);
+        if (res) {
+          let updated = false;
+          if (res.emoji && (loc.emoji === '🍱' || !loc.emoji)) {
+            loc.emoji = res.emoji;
+            updated = true;
+          }
+          if (res.priceRange && (!loc.priceRange || loc.priceRange === '￥20-35')) {
+            loc.priceRange = res.priceRange;
+            updated = true;
+          }
+          if (res.recommendedDish && !loc.recommendedDish) {
+            loc.recommendedDish = res.recommendedDish;
+            updated = true;
+          }
+          if (res.tags && res.tags.length > 0 && (!loc.tags || loc.tags.length === 0)) {
+            loc.tags = res.tags;
+            updated = true;
+          }
+          if (updated) {
+            updateLocation(loc);
+            updatedCount++;
+          }
+        }
+      }
+    }
+
+    pushToCloud(true);
+    if (settings.value.soundEnabled) soundEffects.playWinSound();
+    alert(`✨ 补全完成！AI 已自动补充并完善了 ${updatedCount} 个现有的地点/菜单属性！`);
+  } catch (err: any) {
+    console.error('AI 批量补全菜单失败:', err);
+  } finally {
+    isAutoFilling.value = false;
   }
 }
 
@@ -1009,9 +1132,22 @@ function handleImportFile(event: Event) {
   cursor: pointer;
 }
 
-.toolbar {
+.toolbar-wrapper {
   display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.full-width-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px 14px;
 }
 
 .add-loc-btn {
@@ -1237,13 +1373,25 @@ function handleImportFile(event: Event) {
   height: 16px;
 }
 
-.cloud-btn-row, .backup-btn-row {
+.cloud-btn-wrapper {
   display: flex;
-  gap: 10px;
-  margin-top: 4px;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.cloud-btn-row button, .backup-btn-row button, .file-upload-btn {
+.main-sync-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+}
+
+.sub-sync-row, .backup-btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.sub-sync-row button, .backup-btn-row button, .file-upload-btn {
   flex: 1;
 }
 
@@ -1253,11 +1401,54 @@ function handleImportFile(event: Event) {
 
 .form-row-inline {
   display: flex;
-  gap: 8px;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .form-item.short {
-  width: 90px;
+  width: 105px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.emoji-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.emoji-input {
+  width: 100%;
+  padding-right: 32px !important;
+  font-size: 1.3rem !important;
+  height: 40px;
+  text-align: center;
+  background: #FFFDF9;
+}
+
+.emoji-picker-btn {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #FFF7ED;
+  border: 1px solid #FFD8A8;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.emoji-picker-btn:hover {
+  background: #FFE8CC;
+  transform: translateY(-50%) scale(1.1);
 }
 
 .flex-1 {
@@ -1459,6 +1650,20 @@ function handleImportFile(event: Event) {
 .btn-danger:hover {
   background: #DC2626;
   transform: translateY(-1px);
+}
+
+.ai-autofill-btn {
+  background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%) !important;
+  border: 1px solid #FFB866 !important;
+  color: #C2410C !important;
+  font-weight: 800 !important;
+  box-shadow: 0 2px 6px rgba(255, 102, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.ai-autofill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(255, 102, 0, 0.18);
 }
 
 .select-all-bar {

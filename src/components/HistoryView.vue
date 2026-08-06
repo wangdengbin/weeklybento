@@ -32,8 +32,8 @@
       <div class="dash-header-row">
         <span class="dash-title">📊 个人饮食与财务看板</span>
         <div class="dash-btn-group">
-          <button class="btn-primary small-btn ai-report-btn" @click="handleGenerateWeeklyReport" :disabled="isAiLoading">
-            <Sparkles :size="14" />
+          <button class="btn-primary small-btn ai-report-btn ai-glow-btn" @click="handleGenerateWeeklyReport" :disabled="isAiLoading">
+            <Sparkles :size="14" class="ai-sparkle-icon" />
             <span>{{ isAiLoading ? '生成周报中...' : '✨ AI 饮食周报' }}</span>
           </button>
           <button class="export-csv-btn" @click="exportCSV" title="导出 Excel/CSV 格式记账明细单">
@@ -1072,15 +1072,19 @@ async function confirmDelete(id: string) {
 
 .dash-header-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  gap: 8px 12px;
+  margin-bottom: 12px;
 }
 
 .dash-title {
   font-size: 0.95rem;
   font-weight: 800;
   color: #1E293B;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .export-csv-btn {
@@ -1298,11 +1302,11 @@ async function confirmDelete(id: string) {
 }
 
 .weekly-report-modal {
-  max-width: 480px;
+  max-width: 420px;
   width: 92%;
   background: #FFFDF9;
-  border-radius: 20px;
-  padding: 20px;
+  border-radius: 18px;
+  padding: 16px 18px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
 }
 
@@ -1310,19 +1314,19 @@ async function confirmDelete(id: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
   border-bottom: 1px dashed #E2E8F0;
 }
 
 .title-with-icon {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .report-title {
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 800;
   color: #1E293B;
 }
@@ -1330,10 +1334,10 @@ async function confirmDelete(id: string) {
 .close-report-btn {
   background: #F1F5F9;
   border: none;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  font-size: 14px;
+  font-size: 13px;
   color: #64748B;
   cursor: pointer;
   display: flex;
@@ -1350,9 +1354,9 @@ async function confirmDelete(id: string) {
 .report-card-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-bottom: 20px;
-  max-height: 65vh;
+  gap: 10px;
+  margin-bottom: 14px;
+  max-height: 55vh;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -1360,14 +1364,14 @@ async function confirmDelete(id: string) {
 .report-badge-box {
   background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
   border: 1px solid #FDBA74;
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 12px;
+  padding: 10px 12px;
   text-align: center;
   box-shadow: 0 2px 8px rgba(251, 146, 60, 0.12);
 }
 
 .badge-label {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 800;
   color: #C2410C;
   letter-spacing: 0.5px;
@@ -1375,15 +1379,15 @@ async function confirmDelete(id: string) {
 }
 
 .report-badge-title {
-  font-size: 1.28rem;
+  font-size: 1.1rem;
   font-weight: 900;
   color: #9A3412;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .report-item-card {
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 12px;
+  padding: 10px 12px;
   transition: transform 0.2s ease;
 }
 
@@ -1422,23 +1426,23 @@ async function confirmDelete(id: string) {
 .item-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 4px;
 }
 
 .item-icon {
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .item-title {
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   font-weight: 800;
 }
 
 .item-text {
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   color: #334155;
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
 .report-footer {

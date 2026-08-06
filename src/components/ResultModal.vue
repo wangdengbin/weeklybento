@@ -52,8 +52,8 @@
         <div class="recommend-box">
           <div class="box-title-row">
             <span class="box-title">💡 推荐菜品 / 建议：</span>
-            <button class="recipe-btn-link" type="button" @click="showRecipeModal = true">
-              <ChefHat :size="13" />
+            <button class="recipe-btn-link ai-glow-pill" type="button" @click="showRecipeModal = true">
+              <ChefHat :size="13" class="ai-sparkle-icon" />
               <span>🍳 查看 AI 简易菜谱</span>
             </button>
           </div>

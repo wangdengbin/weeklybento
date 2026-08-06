@@ -71,8 +71,8 @@
               <span>📅 按周不重复</span>
             </label>
 
-            <button class="ai-debate-trigger-btn" type="button" @click="showFoodDebateModal = true" title="两家地点犹豫不决？让 AI 评估论选出结论">
-              <Sparkles :size="14" />
+            <button class="ai-debate-trigger-btn ai-glow-pill" type="button" @click="showFoodDebateModal = true" title="两家地点犹豫不决？让 AI 评估论选出结论">
+              <Sparkles :size="14" class="ai-sparkle-icon" />
               <span>🤼 AI 救救纠结症</span>
             </button>
 
@@ -762,6 +762,31 @@ function handleResetPool() {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 10px;
+}
+
+.ai-debate-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .status-right-tools {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .ai-debate-trigger-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 8px 14px;
+    font-size: 0.8rem;
+  }
 }
 
 .status-dot {
