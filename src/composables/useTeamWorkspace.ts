@@ -415,6 +415,9 @@ async function roll(force = false) {
   const { data, error } = await supabase.rpc('roll_team', { p_team_id: team.value.id, p_force: force });
   if (error) throw error;
   todayResult.value = data as TeamRollResult;
+  // 后台刷新团队历史：今日选中写入 team_draws 后立即同步到「每日记录」页，
+  // 不依赖 Realtime 事件（订阅未生效/网络波动时历史列表也不会滞后）。
+  loadWorkspace().catch(() => {});
   return todayResult.value;
 }
 
